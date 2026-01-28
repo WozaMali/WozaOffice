@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Service Function</title>
+</head>
+<body>
+    <h1>Test Service Function</h1>
+    <button onclick="testServiceFunction()">Test Service Function</button>
+    <div id="result"></div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.skypack.dev/@supabase/supabase-js@2';
+        
+        // You'll need to replace these with your actual Supabase credentials
+        const supabaseUrl = 'YOUR_SUPABASE_URL';
+        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+        
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        async function testServiceFunction() {
+            try {
+                console.log('Testing service function...');
+                
+                // Test authentication
+                const { data: { session } } = await supabase.auth.getSession();
+                console.log('Session:', session);
+                
+                if (!session) {
+                    document.getElementById('result').innerHTML = 'No session found. Please log in.';
+                    return;
+                }
+                
+                // Test profiles query
+                const { data: profiles, error: profilesError } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('role', 'member')
+                    .eq('is_active', true);
+                
+                console.log('Profiles:', profiles);
+                console.log('Profiles error:', profilesError);
+                
+                // Test addresses query
+                const { data: userAddresses, error: addressesError } = await supabase
+                    .from('user_addresses')
+                    .select('*')
+                    .eq('is_active', true);
+                
+                console.log('Addresses:', userAddresses);
+                console.log('Addresses error:', addressesError);
+                
+                // Test combined query
+                const profilesWithAddresses = profiles.map(profile => {
+                    const memberAddresses = userAddresses?.filter(addr => addr.user_id === profile.id) || [];
+                    return {
+                        ...profile,
+                        addresses: memberAddresses
+                    };
+                });
+                
+                console.log('Combined result:', profilesWithAddresses);
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Results:</h3>
+                    <p>Profiles found: ${profiles?.length || 0}</p>
+                    <p>Addresses found: ${userAddresses?.length || 0}</p>
+                    <p>Profiles with addresses: ${profilesWithAddresses.filter(p => p.addresses.length > 0).length}</p>
+                    <pre>${JSON.stringify(profilesWithAddresses, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        window.testServiceFunction = testServiceFunction;
+    </script>
+</body>
+</html>

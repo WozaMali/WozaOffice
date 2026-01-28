@@ -1,0 +1,1 @@
+export function compressVideoForMobile() { console.log("compressVideoForMobile not implemented."); }

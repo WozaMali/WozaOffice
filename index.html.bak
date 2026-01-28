@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Woza Mali - Recycling Management System</title>
+    <meta name="description" content="Woza Mali - Recycling Management System" />
+    <meta name="author" content="Woza Mali Team" />
+
+    <meta property="og:title" content="Woza Mali - Recycling Management System" />
+    <meta property="og:description" content="Woza Mali - Recycling Management System" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/w yellow.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@wozamali" />
+    <meta name="twitter:image" content="/w yellow.png" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/w yellow.png" />
+    <link rel="shortcut icon" type="image/png" href="/w yellow.png" />
+    <link rel="apple-touch-icon" type="image/png" href="/w yellow.png" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

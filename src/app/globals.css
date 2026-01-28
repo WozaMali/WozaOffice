@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global scale down for desktop density */
+@layer base {
+  html {
+    font-size: 14px;
+  }
+}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Notifications Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Audio Notifications Test</h1>
+        <p>This page tests the audio notification system for the WozaMali Office App.</p>
+        
+        <div class="test-section">
+            <h3>Test Collection Sound</h3>
+            <p>Click the button below to test the collection notification sound (higher frequency ping).</p>
+            <button onclick="testCollectionSound()">Test Collection Sound</button>
+            <div id="collection-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Withdrawal Sound</h3>
+            <p>Click the button below to test the withdrawal notification sound (lower frequency ping).</p>
+            <button onclick="testWithdrawalSound()">Test Withdrawal Sound</button>
+            <div id="withdrawal-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Volume Test</h3>
+            <p>Test different volume levels:</p>
+            <button onclick="testVolume(0.2)">Low Volume (20%)</button>
+            <button onclick="testVolume(0.5)">Medium Volume (50%)</button>
+            <button onclick="testVolume(0.8)">High Volume (80%)</button>
+            <div id="volume-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Browser Audio Context</h3>
+            <p>Some browsers require user interaction to enable audio. Click any button above to activate audio context.</p>
+            <div id="audio-context-status"></div>
+        </div>
+    </div>
+
+    <script>
+        let audioContext = null;
+        let isAudioEnabled = false;
+
+        // Initialize audio context
+        function initAudioContext() {
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    updateAudioContextStatus('Audio context initialized successfully', 'success');
+                    isAudioEnabled = true;
+                } catch (error) {
+                    updateAudioContextStatus('Failed to initialize audio context: ' + error.message, 'error');
+                }
+            }
+            return audioContext;
+        }
+
+        // Create ping sound using Web Audio API
+        function createPingSound(frequency, duration = 0.2, volume = 0.7) {
+            const ctx = initAudioContext();
+            if (!ctx || !isAudioEnabled) return;
+
+            try {
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+
+                oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+                oscillator.type = 'sine';
+
+                gainNode.gain.setValueAtTime(0, ctx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(volume * 0.3, ctx.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + duration);
+                
+                return true;
+            } catch (error) {
+                console.error('Error creating ping sound:', error);
+                return false;
+            }
+        }
+
+        // Test collection sound (higher frequency)
+        function testCollectionSound() {
+            const success = createPingSound(800, 0.3, 0.7);
+            updateStatus('collection-status', 
+                success ? '✅ Collection sound played successfully!' : '❌ Failed to play collection sound', 
+                success ? 'success' : 'error'
+            );
+        }
+
+        // Test withdrawal sound (lower frequency)
+        function testWithdrawalSound() {
+            const success = createPingSound(600, 0.4, 0.7);
+            updateStatus('withdrawal-status', 
+                success ? '✅ Withdrawal sound played successfully!' : '❌ Failed to play withdrawal sound', 
+                success ? 'success' : 'error'
+            );
+        }
+
+        // Test volume levels
+        function testVolume(volume) {
+            const success = createPingSound(700, 0.25, volume);
+            updateStatus('volume-status', 
+                success ? `✅ Volume test at ${Math.round(volume * 100)}% played successfully!` : '❌ Failed to play volume test', 
+                success ? 'success' : 'error'
+            );
+        }
+
+        // Update status display
+        function updateStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function updateAudioContextStatus(message, type) {
+            updateStatus('audio-context-status', message, type);
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initAudioContext();
+        });
+    </script>
+</body>
+</html>
