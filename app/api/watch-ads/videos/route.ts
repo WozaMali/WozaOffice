@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdminClient } from '@/lib/supabase';
 
 // GET - Get all active videos (for users) or all videos (for admins)
 export async function GET(request: NextRequest) {
   try {
-    if (!supabaseAdmin) {
+    if (!getSupabaseAdminClient()) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const adminView = searchParams.get('admin') === 'true';
 
     // Build query - get all videos for admin, only active videos for users
-    let query = supabaseAdmin
+    let query = getSupabaseAdminClient()
       .from('watch_ads_videos')
       .select('*');
     
@@ -40,13 +40,13 @@ export async function GET(request: NextRequest) {
     if (userId && !adminView) {
       const videosWithAvailability = await Promise.all(
         (videos || []).map(async (video) => {
-          const { data: canWatch } = await supabaseAdmin!.rpc('can_user_watch_video', {
+          const { data: canWatch } = await getSupabaseAdminClient()!.rpc('can_user_watch_video', {
             p_user_id: userId,
             p_video_id: video.id
           });
 
           // Get today's watch count
-          const { count: todayCount } = await supabaseAdmin!
+          const { count: todayCount } = await getSupabaseAdminClient()!
             .from('video_watches')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId)
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
 // POST - Create a new video (Admin only)
 export async function POST(request: NextRequest) {
   try {
-    if (!supabaseAdmin) {
+    if (!getSupabaseAdminClient()) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating video with data:', insertData);
 
-    const { data: video, error } = await supabaseAdmin
+    const { data: video, error } = await getSupabaseAdminClient()
       .from('watch_ads_videos')
       .insert(insertData)
       .select()
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
 // PUT - Update a video (Admin only)
 export async function PUT(request: NextRequest) {
   try {
-    if (!supabaseAdmin) {
+    if (!getSupabaseAdminClient()) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -184,7 +184,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { data: video, error } = await supabaseAdmin
+    const { data: video, error } = await getSupabaseAdminClient()
       .from('watch_ads_videos')
       .update(updates)
       .eq('id', id)
@@ -212,7 +212,7 @@ export async function PUT(request: NextRequest) {
 // DELETE - Delete a video (Admin only)
 export async function DELETE(request: NextRequest) {
   try {
-    if (!supabaseAdmin) {
+    if (!getSupabaseAdminClient()) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -229,7 +229,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { error } = await supabaseAdmin
+    const { error } = await getSupabaseAdminClient()
       .from('watch_ads_videos')
       .delete()
       .eq('id', id);

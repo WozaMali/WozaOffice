@@ -37,7 +37,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { uploadAdMedia } from '@/lib/app-settings';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseClient, getSupabaseAdminClient } from '@/lib/supabase';
 import { compressImageForCard, compressImageForSlide, recompressImageFromUrl } from '@/lib/image-compression';
 import { compressVideoForMobile } from '@/lib/video-compression';
 import { toast } from '@/components/ui/sonner';
@@ -223,7 +223,7 @@ export default function DiscoverEarnPage() {
     try {
       setCardsLoading(true);
       // In Vite, API routes don't exist - query directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { data, error } = await client
         .from('discover_earn_cards')
@@ -249,7 +249,7 @@ export default function DiscoverEarnPage() {
     try {
       setSlidesLoading(true);
       // In Vite, API routes don't exist - query directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { data, error } = await client
         .from('hero_slides')
@@ -308,7 +308,7 @@ export default function DiscoverEarnPage() {
     try {
       setVideosLoading(true);
       // In Vite, API routes don't exist - query directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { data, error } = await client
         .from('watch_ads_videos')
@@ -892,7 +892,7 @@ export default function DiscoverEarnPage() {
     try {
       setSaving(true);
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('discover_earn_cards')
@@ -921,7 +921,7 @@ export default function DiscoverEarnPage() {
   const toggleActive = async (card: DiscoverEarnCard) => {
     try {
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('discover_earn_cards')
@@ -984,7 +984,7 @@ export default function DiscoverEarnPage() {
     try {
       setSavingSlide(true);
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('hero_slides')
@@ -1013,7 +1013,7 @@ export default function DiscoverEarnPage() {
   const toggleSlideActive = async (slide: HeroSlide) => {
     try {
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('hero_slides')
@@ -1072,7 +1072,7 @@ export default function DiscoverEarnPage() {
     try {
       setSavingVideo(true);
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('watch_ads_videos')
@@ -1101,7 +1101,7 @@ export default function DiscoverEarnPage() {
   const toggleVideoActive = async (video: WatchAdsVideo) => {
     try {
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('watch_ads_videos')
@@ -1157,7 +1157,7 @@ export default function DiscoverEarnPage() {
       setSavingEvent(true);
 
       // In Vite, API routes don't exist - create directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('community_events')
@@ -1196,7 +1196,7 @@ export default function DiscoverEarnPage() {
       setSavingEvent(true);
 
       // In Vite, API routes don't exist - update directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { error } = await client
         .from('community_events')
@@ -1530,7 +1530,7 @@ export default function DiscoverEarnPage() {
                         }
                         setCreatingCard(true);
                         // In Vite, API routes don't exist - create directly via Supabase
-                        const client = supabaseAdmin || supabase;
+                        const client = getSupabaseAdminClient() || getSupabaseClient();
                         
                         const { error } = await client
                           .from('discover_earn_cards')
@@ -1641,7 +1641,7 @@ export default function DiscoverEarnPage() {
                               }
                               if (result.url) {
                                 // Update the card with new compressed image
-                                const client = supabaseAdmin || supabase;
+                                const client = getSupabaseAdminClient() || getSupabaseClient();
                                 const { error: updateError } = await client
                                   .from('discover_earn_cards')
                                   .update({
@@ -2180,7 +2180,7 @@ export default function DiscoverEarnPage() {
                         }
                         setCreatingSlide(true);
                         // In Vite, API routes don't exist - create directly via Supabase
-                        const client = supabaseAdmin || supabase;
+                        const client = getSupabaseAdminClient() || getSupabaseClient();
                         
                         const { error } = await client
                           .from('hero_slides')
@@ -2287,7 +2287,7 @@ export default function DiscoverEarnPage() {
                                 }
                                 if (result.url) {
                                   // Update the slide with new compressed image
-                                  const client = supabaseAdmin || supabase;
+                                  const client = getSupabaseAdminClient() || getSupabaseClient();
                                   const { error: updateError } = await client
                                     .from('hero_slides')
                                     .update({
@@ -3516,7 +3516,7 @@ export default function DiscoverEarnPage() {
                           }
                           setCreatingVideo(true);
                           // In Vite, API routes don't exist - create directly via Supabase
-                          const client = supabaseAdmin || supabase;
+                          const client = getSupabaseAdminClient() || getSupabaseClient();
                           
                           const { error } = await client
                             .from('watch_ads_videos')

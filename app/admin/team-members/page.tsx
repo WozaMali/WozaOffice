@@ -26,7 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from '@/hooks/use-auth';
 import CreateAdminModal from '@/components/admin/CreateAdminModal';
 import TeamMemberCard from '@/components/admin/TeamMemberCard';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseClient, getSupabaseAdminClient } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 interface TeamMember {
@@ -79,7 +79,7 @@ export default function TeamMembersPage() {
   // Load co-operatives count
   const loadCoOperativesCount = async () => {
     try {
-      const { count, error } = await supabase
+      const { count, error } = await getSupabaseClient()
         .from('co_operatives')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active');
@@ -143,7 +143,7 @@ export default function TeamMembersPage() {
     try {
       setLoading(true);
       // Load team members using roles table join
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from('users')
         .select(`
           id,
@@ -172,7 +172,7 @@ export default function TeamMembersPage() {
       if (error) {
         console.error('Error loading team members:', error);
         // Fallback: try without roles join
-        const { data: fallbackData, error: fallbackError } = await supabase
+        const { data: fallbackData, error: fallbackError } = await getSupabaseClient()
           .from('users')
           .select(`
             id,
@@ -224,7 +224,7 @@ export default function TeamMembersPage() {
       let coOpMembers: any[] = [];
       try {
         // First get co-operative member user IDs
-        const { data: coOpData, error: coOpError } = await supabase
+        const { data: coOpData, error: coOpError } = await getSupabaseClient()
           .from('co_operative_members')
           .select('user_id, co_operative_id')
           .eq('status', 'active');
@@ -234,7 +234,7 @@ export default function TeamMembersPage() {
         } else if (coOpData && coOpData.length > 0) {
           const coOpUserIds = coOpData.map(m => m.user_id);
           // Fetch user details for co-operative members
-          const { data: coOpUsers, error: coOpUsersError } = await supabase
+          const { data: coOpUsers, error: coOpUsersError } = await getSupabaseClient()
             .from('users')
             .select(`
               id,
@@ -330,7 +330,7 @@ export default function TeamMembersPage() {
       let data: any[] = [];
       let error: any = null;
 
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleData, error: roleError } = await getSupabaseClient()
         .from('users')
         .select(`
           id,
@@ -355,7 +355,7 @@ export default function TeamMembersPage() {
 
       if (roleError) {
         // Fallback to direct role column query
-        const { data: fallbackData, error: fallbackError } = await supabase
+        const { data: fallbackData, error: fallbackError } = await getSupabaseClient()
           .from('users')
           .select(`
             id,
@@ -416,7 +416,7 @@ export default function TeamMembersPage() {
     setLoadingPending(true);
     try {
       // In Vite, API routes don't exist - query directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       const { data, error } = await client
         .from('users')
@@ -478,7 +478,7 @@ export default function TeamMembersPage() {
   const handleApproveMember = async (memberId: string) => {
     try {
       // In Vite, API routes don't exist - approve directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       const approverId = user?.id;
       
       if (!approverId) {
@@ -526,7 +526,7 @@ export default function TeamMembersPage() {
       const approverId = user?.id;
       if (!approverId) throw new Error('Not authenticated');
 
-      const { error } = await supabase.rpc('reject_collector', {
+      const { error } = await getSupabaseClient().rpc('reject_collector', {
         p_user_id: memberId,
         p_approver_id: approverId,
         p_reason: 'Rejected from Team Members page'
@@ -544,7 +544,7 @@ export default function TeamMembersPage() {
 
   const handleSuspendMember = async (memberId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('users')
         .update({ status: 'suspended', updated_at: new Date().toISOString() })
         .eq('id', memberId);
