@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Service role client (server-only)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
-
 export async function POST(_req: NextRequest) {
   try {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json({ success: false, error: 'Service role key missing' }, { status: 500 })
     }
 
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+ 
     // 1) Fetch all office users (admins/staff) with emails
     const { data: officeUsers, error: usersErr } = await supabaseAdmin
       .from('users')
@@ -76,5 +74,4 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ success: false, error: e?.message || 'Internal error' }, { status: 500 })
   }
 }
-
 

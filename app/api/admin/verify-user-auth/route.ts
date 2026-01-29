@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Create Supabase client with service role key for admin operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
-
 export async function GET(request: NextRequest) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json(
+        { success: false, error: 'Missing Supabase environment variables' },
+        { status: 500 }
+      );
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');
 
@@ -65,7 +67,7 @@ export async function GET(request: NextRequest) {
           last_sign_in_at: user.last_sign_in_at,
           user_metadata: user.user_metadata,
           app_metadata: user.app_metadata,
-          has_password: !!user.encrypted_password
+          has_password: !!(user as any).encrypted_password
         },
         public_user: publicUser ? {
           id: publicUser.id,
@@ -89,4 +91,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

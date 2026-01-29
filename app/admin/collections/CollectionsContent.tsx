@@ -99,28 +99,7 @@ export default function CollectionsContent() {
   }, []);
 
   // Realtime subscriptions - updates instantly when data changes
-  const { isConnected } = useRealtimeConnection(
-    [
-      {
-        table: 'unified_collections',
-        onUpdate: (payload: any) => {
-          console.log('📡 Collection updated:', payload);
-          setRows(prev => prev.map(row => 
-            row.id === payload.new?.id ? { ...row, ...payload.new } : row
-          ));
-        },
-        onInsert: (payload: any) => {
-          console.log('📡 New collection:', payload);
-          setRows(prev => [payload.new, ...prev]);
-        },
-        onDelete: (payload: any) => {
-          console.log('📡 Collection deleted:', payload);
-          setRows(prev => prev.filter(c => c.id !== payload.old?.id));
-        }
-      }
-    ],
-    true
-  );
+  const { isConnected } = useRealtimeConnection();
 
   // Initial load (same pattern as withdrawals page)
   useEffect(() => {

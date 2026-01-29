@@ -837,94 +837,8 @@ export default function DiscoverEarnPage() {
     };
   }, []);
 
-  // Realtime subscriptions - updates instantly when data changes (same pattern as Collections)
-  const { isConnected } = useRealtimeConnection(
-    [
-      {
-        table: 'discover_earn_cards',
-        onUpdate: (payload) => {
-          console.log('📡 Discover & Earn Card updated:', payload);
-          setCards(prev => prev.map(card => 
-            card.id === payload.new?.id ? { ...card, ...payload.new } : card
-          ));
-        },
-        onInsert: (payload) => {
-          console.log('📡 New Discover & Earn Card:', payload);
-          setCards(prev => [payload.new, ...prev].sort((a, b) => a.display_order - b.display_order));
-        },
-        onDelete: (payload) => {
-          console.log('📡 Discover & Earn Card deleted:', payload);
-          setCards(prev => prev.filter(c => c.id !== payload.old?.id));
-        }
-      },
-      {
-        table: 'hero_slides',
-        onUpdate: (payload) => {
-          console.log('📡 Hero Slide updated:', payload);
-          setSlides(prev => prev.map(slide => 
-            slide.id === payload.new?.id ? { ...slide, ...payload.new } : slide
-          ));
-        },
-        onInsert: (payload) => {
-          console.log('📡 New Hero Slide:', payload);
-          setSlides(prev => [payload.new, ...prev].sort((a, b) => a.display_order - b.display_order));
-        },
-        onDelete: (payload) => {
-          console.log('📡 Hero Slide deleted:', payload);
-          setSlides(prev => prev.filter(s => s.id !== payload.old?.id));
-        }
-      },
-      {
-        table: 'watch_ads_videos',
-        onUpdate: (payload) => {
-          console.log('📡 Watch Ads Video updated:', payload);
-          setVideos(prev => prev.map(video => 
-            video.id === payload.new?.id ? { ...video, ...payload.new } : video
-          ));
-        },
-        onInsert: (payload) => {
-          console.log('📡 New Watch Ads Video:', payload);
-          setVideos(prev => [payload.new, ...prev].sort((a, b) => a.display_order - b.display_order));
-        },
-        onDelete: (payload) => {
-          console.log('📡 Watch Ads Video deleted:', payload);
-          setVideos(prev => prev.filter(v => v.id !== payload.old?.id));
-        }
-      },
-      {
-        table: 'community_events',
-        onUpdate: (payload) => {
-          console.log('📡 Community Event updated:', payload);
-          setEvents(prev => prev.map(event => 
-            event.id === payload.new?.id ? { ...event, ...payload.new } : event
-          ));
-        },
-        onInsert: (payload) => {
-          console.log('📡 New Community Event:', payload);
-          setEvents(prev => {
-            const next = [payload.new, ...prev] as CommunityEvent[];
-            return next.sort((a, b) => {
-              if (a.status !== b.status) {
-                if (a.status === 'upcoming') return -1;
-                if (b.status === 'upcoming') return 1;
-              }
-              if (a.event_date === b.event_date) {
-                const aTime = a.start_time || '';
-                const bTime = b.start_time || '';
-                return aTime.localeCompare(bTime);
-              }
-              return a.event_date.localeCompare(b.event_date);
-            });
-          });
-        },
-        onDelete: (payload) => {
-          console.log('📡 Community Event deleted:', payload);
-          setEvents(prev => prev.filter(e => e.id !== payload.old?.id));
-        }
-      }
-    ],
-    true
-  );
+  // Realtime connection status
+  const { isConnected } = useRealtimeConnection();
 
   // Initial load (same pattern as Collections page)
   useEffect(() => {
@@ -4575,4 +4489,3 @@ export default function DiscoverEarnPage() {
     </div>
   );
 }
-
