@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// Create admin client with service role key (only if env vars exist)
-let supabaseAdmin: ReturnType<typeof createClient> | null = null;
-
-if (supabaseUrl && supabaseServiceKey) {
-  supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-}
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
-    if (!supabaseUrl || !supabaseServiceKey || !supabaseAdmin) {
-      console.error('❌ Missing Supabase environment variables');
-      return NextResponse.json(
-        { error: 'Missing Supabase environment variables' },
-        { status: 500 }
-      );
-    }
+    const supabaseAdmin = getSupabaseAdmin();
+    const { searchParams } = new URL(request.url);
 
     console.log('🔍 API: getWallets called');
 
