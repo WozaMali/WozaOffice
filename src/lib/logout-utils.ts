@@ -189,7 +189,8 @@ export class LogoutUtils {
     
     // Add cache busting parameter
     const timestamp = Date.now();
-    window.location.href = `/admin-login?logout=${timestamp}&nocache=true`;
+    // Use replace to clear navigation history and remove any existing URL parameters like 'returnTo'
+    window.location.replace(`/admin-login?logout=${timestamp}&nocache=true`);
   }
   
   /**
