@@ -556,12 +556,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!logoutInProgressRef.current) {
             setUser(session.user);
             const userProfile = await fetchProfile(session.user.id);
-            setProfile(userProfile);
+            if (userProfile) {
+              setProfile(userProfile);
+            } else {
+              // If profile fetch fails, it might indicate an invalid session or user
+              console.warn('🔐 useAuth: Profile fetch failed after SIGNED_IN. Forcing logout.');
+              await logout(); // Use the logout function to clear everything
+              return;
+            }
             // Reset logout flag on successful login
             logoutInProgressRef.current = false;
           } else {
             // Logout in progress - clear the session
-            console.log('🔐 useAuth: Clearing auto-restored session - logout in progress');
+            console.log('🔐 useAuth: Ignoring SIGNED_IN event and clearing auto-restored session - logout in progress');
             try {
               await supabase.auth.signOut();
             } catch {}
@@ -569,8 +576,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfile(null);
           }
         } else {
+          console.log('🔐 useAuth: No session found or SIGNED_OUT event. Clearing user/profile.');
           setUser(null);
           setProfile(null);
+          // Also perform a full logout if it's a SIGNED_OUT event or no session to ensure all traces are gone
+          if (event === 'SIGNED_OUT') {
+            await LogoutUtils.performCompleteLogout(supabase);
+            LogoutUtils.forceRedirectToHome(); // Redirect to login page
+          }
         }
         setIsLoading(false);
       }

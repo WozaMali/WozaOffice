@@ -85,7 +85,12 @@ class KeepAliveManager {
           // Refresh the session token
           const { error: refreshError } = await supabase.auth.refreshSession()
           if (refreshError) {
-            console.warn('⚠️ KeepAlive: Token refresh error:', refreshError)
+            console.warn('⚠️ KeepAlive: Token refresh error, forcing logout:', refreshError)
+            // If refresh fails, it means the session is likely invalid. Force full logout.
+            // This will also trigger a redirect to the login page.
+            const { LogoutUtils } = await import('@/lib/logout-utils');
+            await LogoutUtils.performCompleteLogout(supabase);
+            LogoutUtils.forceRedirectToHome();
           } else {
             console.log('✅ KeepAlive: Session refreshed successfully')
           }
@@ -145,11 +150,17 @@ class KeepAliveManager {
           console.log('🔄 KeepAlive: Tab visible after', Math.round(hiddenDuration / 1000), 'seconds, refreshing...')
           
           // Refresh session
-          supabase.auth.getSession().then(({ data: { session } }) => {
+          supabase.auth.getSession().then(async ({ data: { session } }) => {
             if (session) {
-              supabase.auth.refreshSession().catch(console.error)
+              const { error: refreshError } = await supabase.auth.refreshSession();
+              if (refreshError) {
+                console.warn('⚠️ KeepAlive: Visibility refresh token error, forcing logout:', refreshError);
+                const { LogoutUtils } = await import('@/lib/logout-utils');
+                await LogoutUtils.performCompleteLogout(supabase);
+                LogoutUtils.forceRedirectToHome();
+              }
             }
-          })
+          }).catch(console.error)
 
           // Reconnect realtime
           realtimeManager.reconnectNow()
