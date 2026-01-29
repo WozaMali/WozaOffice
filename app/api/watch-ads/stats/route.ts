@@ -147,10 +147,10 @@ export async function GET(request: NextRequest) {
 
     // Fetch user and video data separately
     const userIds = watches && watches.length > 0 
-      ? [...new Set(watches.map(w => w.user_id).filter(Boolean))] 
+      ? Array.from(new Set(watches.map(w => w.user_id).filter(Boolean)))
       : [];
     const videoIds = watches && watches.length > 0
-      ? [...new Set(watches.map(w => w.video_id).filter(Boolean))]
+      ? Array.from(new Set(watches.map(w => w.video_id).filter(Boolean)))
       : [];
 
     // Fetch users - handle gracefully if table doesn't exist or has errors
