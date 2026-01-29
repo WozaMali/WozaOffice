@@ -199,7 +199,7 @@ export default function EmployeeFormPage() {
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Redirect to admin dashboard
-      navigate('/admin');
+      router.push('/admin');
     } catch (err: any) {
       console.error('❌ Error saving employee form:', err);
       const errorMessage = err.message || 'Failed to save employee information';
