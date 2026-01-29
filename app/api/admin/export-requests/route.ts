@@ -13,6 +13,8 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Helper function to verify user token and get user
 async function verifyUserToken(token: string) {
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
   // Create a regular client to verify the token
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
