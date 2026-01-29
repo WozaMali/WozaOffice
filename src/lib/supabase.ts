@@ -1,46 +1,74 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const rawAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+let supabase: SupabaseClient | undefined;
+let supabaseAdmin: SupabaseClient | null | undefined;
 
-const supabaseUrl = rawUrl?.trim()
-const supabaseAnonKey = rawAnonKey?.trim()
+export function getSupabaseClient(): SupabaseClient {
+  if (supabase) {
+    return supabase;
+  }
 
-console.log('🔌 Creating Supabase client with:');
-console.log('🔌 URL:', supabaseUrl);
-console.log('🔌 Key length:', supabaseAnonKey?.length || 0);
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  const supabaseUrl = rawUrl?.trim();
+  const supabaseAnonKey = rawAnonKey?.trim();
+
+  console.log('🔌 Creating Supabase client with:');
+  console.log('🔌 URL:', supabaseUrl);
+  console.log('🔌 Key length:', supabaseAnonKey?.length || 0);
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
+
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+    realtime: {
+      timeout: 60000, // Increased to 60 seconds
+      heartbeatIntervalMs: 20000, // More frequent heartbeats (every 20 seconds)
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'office-app',
+      },
+    },
+  });
+
+  console.log('✅ Supabase client created successfully');
+  return supabase;
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  },
-  realtime: {
-    timeout: 60000, // Increased to 60 seconds
-    heartbeatIntervalMs: 20000 // More frequent heartbeats (every 20 seconds)
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'office-app'
-    }
+export function getSupabaseAdminClient(): SupabaseClient | null {
+  if (supabaseAdmin) {
+    return supabaseAdmin;
   }
-});
 
-// Create admin client with service role key for admin operations (server-side only)
-// Prefer SUPABASE_SERVICE_ROLE_KEY. Fall back to NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY for legacy setups,
-// but NOTE: anything prefixed NEXT_PUBLIC is exposed to the browser and should not be used for secrets.
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
-export const supabaseAdmin = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = rawUrl?.trim();
 
-console.log('✅ Supabase client created successfully');
-console.log('✅ Supabase admin client created:', supabaseAdmin ? 'Yes' : 'No');
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.warn('⚠️ Missing Supabase admin environment variables. Admin client will not be created.');
+    return null;
+  }
+
+  supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  console.log('✅ Supabase admin client created: Yes');
+  return supabaseAdmin;
+}
+
+// Initialize clients immediately for server-side or initial client-side access
+// For client-side, subsequent calls will use the cached instance
+getSupabaseClient();
+getSupabaseAdminClient();
 
 // Database types matching your new schema
 export interface Profile {

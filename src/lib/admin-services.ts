@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from './supabase';
+import { getSupabaseClient, getSupabaseAdminClient } from './supabase';
 import { realtimeManager } from './realtimeManager';
 import { 
   Profile, 
@@ -53,6 +53,7 @@ export async function testSupabaseConnection() {
   console.log('🔑 Anon Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Not Set');
   
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('profiles')
       .select('count')
@@ -79,6 +80,7 @@ export async function getUsers(): Promise<Profile[]> {
   console.log('🔍 Fetching users from unified users table...');
   
   try {
+    const supabase = getSupabaseClient();
     // Fetch all users in pages to bypass the 1000-row default cap
     const pageSize = 1000;
     let page = 0;
@@ -156,6 +158,7 @@ export async function getUsers(): Promise<Profile[]> {
 }
 
 export function subscribeToUsers(callback: RealtimeCallback<Profile>) {
+  const supabase = getSupabaseClient();
   realtimeManager.subscribe('users_changes', (channel) => {
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload: any) => {
       callback({ new: payload.new as Profile, old: payload.old as Profile, eventType: payload.eventType });
@@ -165,6 +168,7 @@ export function subscribeToUsers(callback: RealtimeCallback<Profile>) {
 }
 
 export async function updateUserRole(userId: string, role: string, isActive: boolean) {
+  const supabase = getSupabaseClient();
   const { error } = await supabase
     .from('profiles')
     .update({ role, is_active: isActive })
@@ -177,6 +181,7 @@ export async function deleteUser(userId: string) {
   console.log(`🗑️ Deleting user ${userId}...`);
   
   try {
+    const supabase = getSupabaseClient();
     // First, get the user to check if they have any collections
     const { data: userCollections, error: collectionsError } = await supabase
       .from('unified_collections')
@@ -216,6 +221,7 @@ export async function getUserDetails(userId: string) {
   console.log(`🔍 Fetching user details for ${userId}...`);
   
   try {
+    const supabase = getSupabaseClient();
     // Get user profile
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -1096,6 +1102,7 @@ async function updateCustomerWallet(customerId: string, totalValue: number, tota
     const totalPoints = Math.floor(totalWeight); // 1 point per kg
 
     // Use the simple wallet update function
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.rpc('update_wallet_simple', {
       p_user_id: customerId,
       p_amount: totalValue,
@@ -1133,6 +1140,7 @@ export async function getPayments(): Promise<Payment[]> {
   console.log('🔍 Fetching payments from Supabase...');
   
   try {
+    const supabase = getSupabaseClient();
     // Fetch payments; if payments table missing, return empty to avoid crashing dashboard
     const paymentsResp = await supabase
       .from('payments')
@@ -1210,6 +1218,7 @@ export async function getPayments(): Promise<Payment[]> {
 }
 
 export function subscribeToPayments(callback: RealtimeCallback<Payment>) {
+  const supabase = getSupabaseClient();
   return supabase
     .channel('payments_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => {
@@ -1219,6 +1228,7 @@ export function subscribeToPayments(callback: RealtimeCallback<Payment>) {
 }
 
 export async function updatePaymentStatus(paymentId: string, status: string, adminNotes?: string) {
+  const supabase = getSupabaseClient();
   const { error } = await supabase
     .from('payments')
     .update({ 
@@ -1284,6 +1294,7 @@ export async function getWithdrawals(status?: string): Promise<Withdrawal[]> {
 // Fallback: derive displayable withdrawals from unified_collections when withdrawal_requests is empty or blocked by RLS
 export async function getWithdrawalsFallbackFromCollections(params?: { collectionId?: string; customerEmail?: string; limit?: number }): Promise<Withdrawal[]> {
   try {
+    const supabase = getSupabaseClient();
     const collectionSelect = 'id, customer_id, customer_email, computed_value, total_value, status, created_at, updated_at';
     let q = supabase
       .from('unified_collections')
@@ -1352,6 +1363,7 @@ export async function getWithdrawalsFallbackFromCollections(params?: { collectio
 export function subscribeToWithdrawals(callback: RealtimeCallback<any>) {
   // Use regular client for real-time subscriptions
   // Note: This may not work if RLS blocks the subscription, but we'll try
+  const supabase = getSupabaseClient();
   return supabase
     .channel('withdrawal_requests_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests' }, (payload) => {
@@ -1402,6 +1414,7 @@ export async function updateWithdrawalStatusOffice(
 // Assign collector to a unified collection (Office action)
 export async function assignCollectorToCollection(collectionId: string, collectorId: string): Promise<boolean> {
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('collections')
       .update({ collector_id: collectorId, updated_at: new Date().toISOString() })
@@ -1424,6 +1437,7 @@ export async function assignCollectorToCollection(collectionId: string, collecto
 // ============================================================================
 
 export async function getMaterials(): Promise<Material[]> {
+  const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('materials')
     .select('*')
@@ -1434,6 +1448,7 @@ export async function getMaterials(): Promise<Material[]> {
 }
 
 export function subscribeToMaterials(callback: RealtimeCallback<Material>) {
+  const supabase = getSupabaseClient();
   return supabase
     .channel('materials_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => {
@@ -1443,6 +1458,7 @@ export function subscribeToMaterials(callback: RealtimeCallback<Material>) {
 }
 
 export async function updateMaterialPricing(materialId: string, ratePerKg: number) {
+  const supabase = getSupabaseClient();
   const { error } = await supabase
     .from('materials')
     .update({ rate_per_kg: ratePerKg })
@@ -1459,6 +1475,7 @@ export async function getRecentActivity(limit: number = 20) {
   console.log('🔍 Fetching recent activity...');
   
   try {
+    const supabase = getSupabaseClient();
     const activities: any[] = [];
 
     // Get recent collections from unified schema
@@ -1753,6 +1770,7 @@ export async function getSystemImpact() {
   console.log('🔍 Fetching system impact data (unified schema first)...');
 
   try {
+    const supabase = getSupabaseClient();
     // Prefer unified_collections → fallback to collections → legacy pickups
     const revenueStatuses = new Set(['approved', 'completed']);
 
@@ -1843,6 +1861,7 @@ export async function getMaterialPerformance() {
   console.log('🔍 Fetching material performance data (unified schema)...');
 
   try {
+    const supabase = getSupabaseClient();
     // Fetch collection items and their parent collections' status
     const { data: items, error: itemsError } = await supabase
       .from('collection_materials')
@@ -1999,6 +2018,7 @@ export async function getCollectorPerformance() {
   console.log('🔍 Fetching collector performance data (unified schema)...');
 
   try {
+    const supabase = getSupabaseClient();
     // Prefer unified_collections; fallback to collections; legacy has no collectors
     let { data: rows, error } = await supabase
       .from('unified_collections')
@@ -2080,6 +2100,7 @@ export async function getCustomerPerformance() {
   console.log('🔍 Fetching customer performance data (unified schema)...');
 
   try {
+    const supabase = getSupabaseClient();
     // Prefer unified_collections; fallback to collections; legacy last
     const revenueStatuses = new Set(['approved', 'completed']);
     let { data: rows, error } = await supabase

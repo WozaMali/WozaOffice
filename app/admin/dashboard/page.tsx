@@ -26,7 +26,6 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { keepAliveManager } from '@/lib/keepalive-manager';
 import { UnifiedAdminService, useDashboardData } from '@/lib/unified-admin-service';
 import { notificationManager } from '@/lib/notificationManager';

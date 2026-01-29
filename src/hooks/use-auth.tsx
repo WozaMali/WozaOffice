@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { logAdminSessionEvent } from '@/lib/admin-session-logging';
 import { LogoutUtils } from '@/lib/logout-utils';
 
@@ -84,7 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (timeoutErr?.message === 'Profile fetch timeout' && !queryCompleted) {
           // Silently use minimal profile - this is expected for slow connections
           // The query will continue in background, but we return minimal profile now
-          const { data: { session } } = await supabase.auth.getSession();
+          const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
           const email = session?.user?.email || '';
           const roleGuess = email.toLowerCase().includes('superadmin@wozamali.co.za')
             ? 'super_admin'
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let roleName = 'resident';
         if (unifiedUser.role_id) {
           try {
+            const supabase = getSupabaseClient();
             const { data: roleData } = await Promise.race([
               supabase.from('roles').select('name').eq('id', unifiedUser.role_id).maybeSingle(),
               new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 500))
@@ -148,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('ℹ️ Unified users table error, trying legacy profiles:', unifiedError.message);
           try {
             // Try legacy with timeout
+            const supabase = getSupabaseClient();
             const legacyPromise = supabase
               .from('profiles')
               .select('*')
@@ -176,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Minimal profile derived from session when tables are missing
+      const supabase = getSupabaseClient();
       const { data: { session } } = await supabase.auth.getSession();
       const email = session?.user?.email || '';
       const roleGuess = email.toLowerCase().includes('superadmin@wozamali.co.za')
@@ -196,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('❌ Error in fetchProfile:', err);
       }
       // As a last resort build minimal profile from current session
+      const supabase = getSupabaseClient();
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const email = session.user.email || '';
@@ -227,6 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Reset logout flag on explicit login
       logoutInProgressRef.current = false;
       
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password: normalizedPassword,
@@ -285,6 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, profileData: Partial<Profile>) => {
     try {
       setError(null);
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -296,6 +303,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         // Create profile in profiles table
+        const supabase = getSupabaseClient();
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([
@@ -330,6 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('🔐 Sending password reset for:', email);
       console.log('🔐 Redirect URL will be: http://localhost:8081/admin-login');
       
+      const supabase = getSupabaseClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: 'http://localhost:8081/admin-login'
       });
@@ -365,6 +374,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logAdminSessionEvent(currentUserId || null, 'logout').catch(() => {});
       
       // Use comprehensive logout utility
+      const supabase = getSupabaseClient();
       try {
         await LogoutUtils.performCompleteLogout(supabase);
         console.log('✅ User logged out successfully and all session data cleared');
@@ -413,6 +423,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const supabase = getSupabaseClient();
       const { error } = await supabase
         .from('profiles')
         .update(updates)
@@ -446,6 +457,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Update password function
   const updatePassword = async (password: string) => {
     try {
+      const supabase = getSupabaseClient();
       const { error } = await supabase.auth.updateUser({ password });
       
       if (error) {
@@ -470,6 +482,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 5000); // 5 seconds max - allows time for profile fetch
     
     const checkUser = async () => {
+      const supabase = getSupabaseClient();
       try {
         console.log('🔐 useAuth: Fetching user session...');
         // Get current session - this is a local operation and should be fast
@@ -529,7 +542,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkUser();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = getSupabaseClient().auth.onAuthStateChange(
       async (event, session) => {
         console.log('🔐 useAuth: Auth state change:', event, session?.user?.id);
         
@@ -538,7 +551,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('🔐 useAuth: Ignoring SIGNED_IN event - logout in progress');
           // Clear the session that was auto-restored
           try {
-            await supabase.auth.signOut();
+            await getSupabaseClient().auth.signOut();
           } catch {}
           setUser(null);
           setProfile(null);
@@ -570,7 +583,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Logout in progress - clear the session
             console.log('🔐 useAuth: Ignoring SIGNED_IN event and clearing auto-restored session - logout in progress');
             try {
-              await supabase.auth.signOut();
+              await getSupabaseClient().auth.signOut();
             } catch {}
             setUser(null);
             setProfile(null);

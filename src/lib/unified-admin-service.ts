@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getSupabaseClient, getSupabaseAdminClient } from './supabase';
 import type { 
   User, 
   UserWithRole,
@@ -85,8 +85,9 @@ export class UnifiedAdminService {
   // ============================================================================
   // DASHBOARD DATA
   // ============================================================================
-  static async getDashboardData(): Promise<{ data: AdminDashboardData | null; error: any }> {
+      static async getDashboardData(): Promise<{ data: AdminDashboardData | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Load all data in parallel for maximum speed
       const [userCountResult, collectionsResult, rolesResult, walletsResult] = await Promise.allSettled([
         // User counts - use count queries to avoid 1000-row limit
@@ -239,6 +240,7 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getAllUsers(): Promise<{ data: UserComplete[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Fetch all users in pages to bypass the 1000-row default cap
       const pageSize = 1000;
       let page = 0;
@@ -284,6 +286,7 @@ export class UnifiedAdminService {
 
   static async getUsersByRole(roleName: string): Promise<{ data: User[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -319,6 +322,7 @@ export class UnifiedAdminService {
     postal_code?: string;
   }): Promise<{ data: User | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Get role ID
       const { data: role, error: roleError } = await supabase
         .from('roles')
@@ -370,6 +374,7 @@ export class UnifiedAdminService {
 
   static async updateUser(userId: string, updateData: Partial<User>): Promise<{ data: User | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('users')
         .update({
@@ -398,6 +403,7 @@ export class UnifiedAdminService {
 
   static async deleteUser(userId: string): Promise<{ data: boolean | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Check if user has collections (unified only)
       const { data: collections, error: collectionsError } = await supabase
         .from('unified_collections')
@@ -437,6 +443,7 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getAllCollections(): Promise<{ data: CollectionData[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Simplified fast query - use denormalized data from unified_collections
       // This avoids complex joins and multiple queries that cause timeouts
       console.log('🔄 getAllCollections: Starting simplified fetch...');
@@ -544,6 +551,7 @@ export class UnifiedAdminService {
 
   static async updateCollectionStatus(collectionId: string, status: string, notes?: string): Promise<{ data: CollectionData | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Use RPCs for approved/rejected to ensure wallet/fund/points post atomically
       if (status === 'approved' || status === 'rejected') {
         const { data: authData, error: authErr } = await supabase.auth.getUser();
@@ -673,6 +681,7 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getTownships(): Promise<{ data: TownshipDropdown[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Use the same source as Main App and constrain to Soweto
       const { data, error } = await supabase
         .from('address_townships')
@@ -700,6 +709,7 @@ export class UnifiedAdminService {
 
   static async getSubdivisions(townshipId: string): Promise<{ data: SubdivisionDropdown[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Use the same source as Main App
       const { data, error } = await supabase
         .from('address_subdivisions')
@@ -745,6 +755,7 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getMaterials(): Promise<{ data: Material[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('materials')
         .select('*')
@@ -768,6 +779,7 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getRecentActivity(limit: number = 20): Promise<{ data: RecentActivity[] | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       const activities: RecentActivity[] = [];
 
       // Get recent collections
@@ -871,6 +883,7 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getWalletData(): Promise<{ data: any | null; error: any }> {
     try {
+      const supabase = getSupabaseClient();
       // Try unified table then fallback to legacy wallets
       let walletsResp = await supabase
         .from('user_wallets')

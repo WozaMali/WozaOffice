@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 
 export function useRealtimeConnection() {
   const [isConnected, setIsConnected] = useState(false);
@@ -8,6 +8,7 @@ export function useRealtimeConnection() {
   useEffect(() => {
     console.log('Realtime connection hook mounted');
 
+    const supabase = getSupabaseClient();
     const channel = supabase.channel('realtime_channel');
 
     channel
@@ -37,7 +38,7 @@ export function useRealtimeConnection() {
 
     return () => {
       console.log('Realtime connection hook unmounted');
-      supabase.removeChannel(channel);
+      getSupabaseClient().removeChannel(channel);
     };
   }, []);
 

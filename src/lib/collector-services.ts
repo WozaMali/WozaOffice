@@ -1,9 +1,10 @@
-import { supabase, supabaseAdmin } from './supabase';
+import { getSupabaseClient, getSupabaseAdminClient } from './supabase';
 
 // Get collector ID by email (for real collector data)
 export async function getCollectorIdByEmail(email: string): Promise<string | null> {
   try {
     console.log('🔍 Looking up collector ID for email:', email);
+    const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) {
       throw new Error('Supabase admin client not initialized. Ensure NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY is set.');
     }
@@ -38,6 +39,7 @@ export async function getCollectorIdByEmail(email: string): Promise<string | nul
 export async function testSupabaseConnection() {
   try {
     console.log('🔌 Testing Supabase connection...');
+    const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) {
       throw new Error('Supabase admin client not initialized. Ensure NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY is set.');
     }
@@ -67,6 +69,7 @@ export async function testSupabaseConnection() {
       // Try a different approach - test if we can at least connect
       console.log('🔌 Trying alternative connection test...');
       try {
+        const supabase = getSupabaseClient();
         const { data: testData, error: testError } = await supabase
           .rpc('version');
         
@@ -124,7 +127,7 @@ export async function checkRequiredTables() {
   
   try {
     console.log('🔍 Checking required database tables...');
-    
+    const supabase = getSupabaseClient();
     for (const tableName of requiredTables) {
       try {
         const { data, error } = await supabase
@@ -248,7 +251,7 @@ export interface Material {
 export async function getCollectorPickups(collectorId: string): Promise<CollectorPickup[]> {
   try {
     console.log('🔍 Getting collector pickups for:', collectorId);
-    
+    const supabase = getSupabaseClient();
     // First, test the database connection
     const { data: testData, error: testError } = await supabase
       .from('pickups')
@@ -263,44 +266,8 @@ export async function getCollectorPickups(collectorId: string): Promise<Collecto
     console.log('✅ Database connection test passed');
     
     // Now get the actual pickups data
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('pickups')
-      .select(`
-        *,
-        customer:profiles!pickups_customer_id_fkey(
-          id,
-          full_name,
-          phone,
-          email
-        ),
-        address:addresses!pickups_address_id_fkey(
-          id,
-          line1,
-          suburb,
-          city,
-          postal_code
-        ),
-        items:pickup_items(
-          id,
-          material_id,
-          kilograms,
-          contamination_pct,
-          material:materials(
-            id,
-            name,
-            rate_per_kg,
-            unit
-          )
-        ),
-        photos:pickup_photos(
-          id,
-          url,
-          taken_at,
-          type
-        )
-      `)
-      .eq('collector_id', collectorId)
-      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('❌ Error getting collector pickups:', error);
@@ -340,7 +307,7 @@ export async function getCollectorPickups(collectorId: string): Promise<Collecto
 export async function getCollectorStats(collectorId: string): Promise<CollectorStats> {
   try {
     console.log('📊 Getting collector stats for:', collectorId);
-    
+    const supabase = getSupabaseClient();
     // First, test the database connection
     const { data: testData, error: testError } = await supabase
       .from('pickups')
@@ -359,6 +326,7 @@ export async function getCollectorStats(collectorId: string): Promise<CollectorS
       .from('pickups')
       .select('*')
       .eq('collector_id', collectorId);
+
 
     if (error) {
       console.error('❌ Error getting collector stats:', error);
@@ -438,7 +406,7 @@ export async function getCollectorStats(collectorId: string): Promise<CollectorS
 export async function getMaterials(): Promise<Material[]> {
   try {
     console.log('🔍 Getting materials...');
-    
+    const supabase = getSupabaseClient();
     // First, test the database connection
     const { data: testData, error: testError } = await supabase
       .from('materials')
@@ -458,6 +426,7 @@ export async function getMaterials(): Promise<Material[]> {
       .select('*')
       .eq('is_active', true)
       .order('name');
+
 
     if (error) {
       console.error('❌ Error getting materials:', error);
@@ -504,7 +473,7 @@ export async function createPickup(pickupData: {
 }): Promise<string> {
   try {
     console.log('📝 Creating new pickup:', pickupData);
-    
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('pickups')
       .insert([{
@@ -537,7 +506,7 @@ export async function addPickupItems(pickupId: string, items: Array<{
 }>): Promise<void> {
   try {
     console.log('📦 Adding pickup items for pickup:', pickupId);
-    
+    const supabase = getSupabaseClient();
     const { error } = await supabase
       .from('pickup_items')
       .insert(items.map(item => ({
@@ -564,7 +533,7 @@ export async function addPickupPhotos(pickupId: string, photos: Array<{
 }>): Promise<void> {
   try {
     console.log('📸 Adding pickup photos for pickup:', pickupId);
-    
+    const supabase = getSupabaseClient();
     const { error } = await supabase
       .from('pickup_photos')
       .insert(photos.map(photo => ({
@@ -587,6 +556,7 @@ export async function addPickupPhotos(pickupId: string, photos: Array<{
 
 // Subscribe to real-time pickup changes for a collector
 export function subscribeToCollectorPickups(collectorId: string, callback: (payload: any) => void) {
+  const supabase = getSupabaseClient();
   return supabase
     .channel(`collector_pickups_${collectorId}`)
     .on('postgres_changes', { 
@@ -619,6 +589,7 @@ export function subscribeToCollectorPickups(collectorId: string, callback: (payl
 
 // Subscribe to material changes
 export function subscribeToMaterials(callback: (payload: any) => void) {
+  const supabase = getSupabaseClient();
   return supabase
     .channel('materials_changes')
     .on('postgres_changes', { 
