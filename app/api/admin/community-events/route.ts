@@ -19,8 +19,15 @@ function ensureSupabaseAdmin() {
 // GET - Fetch community events (optionally filtered by status and date range)
 export async function GET(request: NextRequest) {
   try {
-    const clientError = ensureSupabaseAdmin();
     if (clientError) return clientError;
+
+    // TypeScript doesn't know ensureSupabaseAdmin checks this, so we assert it
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client is not configured' },
+        { status: 500 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // upcoming | completed | cancelled
@@ -78,8 +85,14 @@ export async function GET(request: NextRequest) {
 // POST - Create a new community event
 export async function POST(request: NextRequest) {
   try {
-    const clientError = ensureSupabaseAdmin();
     if (clientError) return clientError;
+
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client is not configured' },
+        { status: 500 }
+      );
+    }
 
     const body = await request.json();
     const {
