@@ -202,14 +202,14 @@ export async function GET(request: NextRequest) {
     const totalAdmins = userCounts.admins || 0;
 
     // Use aggregated collections data (much faster)
-    const totalCollections = typeof collectionsData === 'object' && 'total' in collectionsData ? collectionsData.total : (Array.isArray(collectionsData) ? collectionsData.length : 0);
-    const totalWeight = typeof collectionsData === 'object' && 'totalWeight' in collectionsData ? collectionsData.totalWeight : (Array.isArray(collectionsData) ? collectionsData.reduce((sum: number, c: any) => sum + (Number(c.weight_kg ?? c.total_weight_kg ?? 0)), 0) : 0);
-    const pendingCollections = typeof collectionsData === 'object' && 'pending' in collectionsData ? collectionsData.pending : (Array.isArray(collectionsData) ? collectionsData.filter((c: any) => c.status === 'pending' || c.status === 'submitted').length : 0);
-    const approvedCollections = typeof collectionsData === 'object' && 'approved' in collectionsData ? collectionsData.approved : (Array.isArray(collectionsData) ? collectionsData.filter((c: any) => c.status === 'approved').length : 0);
-    const rejectedCollections = typeof collectionsData === 'object' && 'rejected' in collectionsData ? collectionsData.rejected : (Array.isArray(collectionsData) ? collectionsData.filter((c: any) => c.status === 'rejected').length : 0);
+    const totalCollections = collectionsData.total;
+    const totalWeight = collectionsData.totalWeight;
+    const pendingCollections = collectionsData.pending;
+    const approvedCollections = collectionsData.approved;
+    const rejectedCollections = collectionsData.rejected;
     
     // Use aggregated revenue (much faster)
-    const computedRevenue = typeof collectionsData === 'object' && 'totalRevenue' in collectionsData ? collectionsData.totalRevenue : (Array.isArray(collectionsData) ? collectionsData.filter((c: any) => ['approved', 'completed'].includes(c.status)).reduce((sum: number, c: any) => sum + (Number(c.computed_value ?? c.total_value ?? 0)), 0) : 0);
+    const computedRevenue = collectionsData.totalRevenue;
 
     // Calculate payment metrics
     const totalPayments = payments.length;
