@@ -71,6 +71,8 @@ export async function PATCH(
     const body = await request.json();
     const { status, rejection_reason } = body;
 
+    const supabaseAdmin = getSupabaseAdmin();
+
     // Get user from auth header
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
