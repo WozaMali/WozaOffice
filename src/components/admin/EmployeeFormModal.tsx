@@ -224,10 +224,13 @@ export default function EmployeeFormModal({ isOpen, onClose, onSuccess, isFirstL
       }
       if (formData.phone !== undefined) updateData.phone = formData.phone;
       if (formData.dateOfBirth !== undefined) updateData.date_of_birth = formData.dateOfBirth;
-      if (formData.streetAddr !== undefined) updateData.street_addr = formData.streetAddr;
+      if (formData.addressLine1 !== undefined) updateData.address_line1 = formData.addressLine1;
+      if (formData.addressLine2 !== undefined) updateData.address_line2 = formData.addressLine2;
+      if (formData.suburb !== undefined) updateData.suburb = formData.suburb;
       if (formData.city !== undefined) updateData.city = formData.city;
+      if (formData.province !== undefined) updateData.province = formData.province;
       if (formData.postalCode !== undefined) updateData.postal_code = formData.postalCode;
-      if (formData.township !== undefined) updateData.township_id = formData.township;
+      if (formData.township !== undefined) updateData.township = formData.township;
 
       const { error: updateError } = await client
         .from('users')

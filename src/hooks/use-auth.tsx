@@ -443,6 +443,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Update password function
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      
+      return { success: true };
+    } catch (err: any) {
+      console.error('Password update error:', err);
+      return { success: false, error: 'Password update failed' };
+    }
+  };
+
   // Effect to handle auth state changes
   useEffect(() => {
     console.log('🔐 useAuth: Starting auth state check');
@@ -575,6 +591,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetPassword,
     logout,
     updateProfile,
+    updatePassword,
     refreshProfile,
   };
 

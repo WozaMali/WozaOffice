@@ -82,7 +82,8 @@ export async function GET(request: NextRequest) {
       query = query.lte('created_at', endDate);
     }
 
-    const { data: watches, error, count } = await query;
+    const { data: watchesData, error, count } = await query;
+    const watches = watchesData as any[] | null;
 
     if (error) {
       console.error('Error fetching video watch stats:', error);

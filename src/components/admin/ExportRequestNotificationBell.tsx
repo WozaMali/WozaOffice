@@ -25,6 +25,10 @@ interface ExportRequest {
   status: 'pending' | 'approved' | 'rejected' | 'expired';
   created_at: string;
   updated_at: string;
+  request_data?: {
+    columns: any[];
+    rows: any[];
+  };
   approved_by?: string;
   approved_at?: string;
   rejection_reason?: string;

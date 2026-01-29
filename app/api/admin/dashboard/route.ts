@@ -201,14 +201,14 @@ export async function GET(request: NextRequest) {
     const totalCollectors = userCounts.collectors || 0;
     const totalAdmins = userCounts.admins || 0;
 
-    // Use aggregated collections data (much faster)
+    // Use aggregated collections data
     const totalCollections = collectionsData.total;
     const totalWeight = collectionsData.totalWeight;
     const pendingCollections = collectionsData.pending;
     const approvedCollections = collectionsData.approved;
     const rejectedCollections = collectionsData.rejected;
     
-    // Use aggregated revenue (much faster)
+    // Use aggregated revenue
     const computedRevenue = collectionsData.totalRevenue;
 
     // Calculate payment metrics

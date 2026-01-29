@@ -23,11 +23,6 @@ export function useRealtimeConnection() {
           setIsConnected(false);
         }
       })
-      .on('error', (e) => {
-        console.error('Realtime channel error:', e);
-        setIsConnected(false);
-        setError(e.message || 'Realtime connection error');
-      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
