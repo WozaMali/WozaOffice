@@ -288,6 +288,7 @@ export async function updateUserProfile(userId: string, updateData: {
   is_active?: boolean;
 }) {
   console.log(`✏️ Updating user profile for ${userId}...`);
+  const supabase = getSupabaseClient();
   
   try {
     const { data, error } = await supabase
