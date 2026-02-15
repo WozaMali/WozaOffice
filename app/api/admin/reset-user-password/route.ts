@@ -4,6 +4,12 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
     const body = await request.json();
     const { email, newPassword } = body;
 

@@ -4,6 +4,12 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 export async function GET(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
     
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');
