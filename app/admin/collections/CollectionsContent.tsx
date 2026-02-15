@@ -119,6 +119,7 @@ export default function CollectionsContent() {
         if (missing.length === 0) return;
 
         const map: Record<string, string> = { ...fullNameByEmail };
+        const supabase = getSupabaseClient();
 
         const { data: usersData } = await supabase
           .from('users')
