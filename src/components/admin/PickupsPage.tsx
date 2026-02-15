@@ -129,6 +129,7 @@ export default function PickupsPage() {
         if (missing.length === 0) return;
 
         const map: Record<string, string> = { ...fullNameByEmail };
+        const supabase = getSupabaseClient();
 
         // Primary: users table
         const { data: usersData } = await supabase
