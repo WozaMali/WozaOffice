@@ -522,6 +522,8 @@ export async function bulkDeleteUsersByDateRange(
   } = {}
 ): Promise<{ success: boolean; deleted: number; errors: string[] }> {
   console.log(`🗑️ Bulk deleting users created between ${startDate.toISOString()} and ${endDate?.toISOString() || 'now'}...`);
+  const supabase = getSupabaseClient();
+  const supabaseAdmin = getSupabaseAdminClient();
   
   try {
     // Get users in date range
@@ -570,8 +572,6 @@ export async function bulkDeleteUsersByDateRange(
         }
         
         // Delete from users table
-        const supabase = getSupabaseClient();
-        const supabaseAdmin = getSupabaseAdminClient();
         const { error: deleteError } = await supabase
           .from('users')
           .delete()
