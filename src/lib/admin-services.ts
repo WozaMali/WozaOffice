@@ -329,6 +329,7 @@ export async function bulkUpdateUserNames(
   } = {}
 ): Promise<{ success: boolean; updated: number; error?: string }> {
   console.log(`🔄 Bulk updating user names with ${names.length} names...`);
+  const supabase = getSupabaseClient();
   
   try {
     // Fetch all users
