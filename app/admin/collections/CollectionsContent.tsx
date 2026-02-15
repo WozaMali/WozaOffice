@@ -214,6 +214,7 @@ export default function CollectionsContent() {
       setSelectedId(collectionId);
       setDetailsLoading(true);
       setDetails(null);
+      const supabase = getSupabaseClient();
 
       // Fetch collection base data from unified_collections
       const base = await supabase
