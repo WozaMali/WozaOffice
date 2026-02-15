@@ -545,6 +545,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = getSupabaseClient().auth.onAuthStateChange(
       async (event, session) => {
+        const supabase = getSupabaseClient();
         console.log('🔐 useAuth: Auth state change:', event, session?.user?.id);
         
         // If logout is in progress, ignore SIGNED_IN events to prevent auto-login
@@ -552,7 +553,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('🔐 useAuth: Ignoring SIGNED_IN event - logout in progress');
           // Clear the session that was auto-restored
           try {
-            await getSupabaseClient().auth.signOut();
+            await supabase.auth.signOut();
           } catch {}
           setUser(null);
           setProfile(null);
@@ -584,7 +585,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Logout in progress - clear the session
             console.log('🔐 useAuth: Ignoring SIGNED_IN event and clearing auto-restored session - logout in progress');
             try {
-              await getSupabaseClient().auth.signOut();
+              await supabase.auth.signOut();
             } catch {}
             setUser(null);
             setProfile(null);
