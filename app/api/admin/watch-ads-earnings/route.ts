@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
     });
 
     // Get unique user IDs and video IDs
-    const userIds = [...new Set(filteredWatches.map((w: any) => w.user_id).filter(Boolean))];
-    const videoIds = [...new Set(filteredWatches.map((w: any) => w.video_id).filter(Boolean))];
+    const userIds = Array.from(new Set(filteredWatches.map((w: any) => w.user_id).filter(Boolean)));
+    const videoIds = Array.from(new Set(filteredWatches.map((w: any) => w.video_id).filter(Boolean)));
 
     // Fetch users and videos separately
     let usersMap: Record<string, any> = {};
