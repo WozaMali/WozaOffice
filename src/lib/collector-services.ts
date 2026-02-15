@@ -287,8 +287,10 @@ export async function getCollectorPickups(collectorId: string): Promise<Collecto
     console.log('✅ Database connection test passed');
     
     // Now get the actual pickups data
-    const { data, error } = await getSupabaseClient()
+    const { data, error } = await supabase
       .from('pickups')
+      .select('*')
+      .eq('collector_id', collectorId);
 
     if (error) {
       console.error('❌ Error getting collector pickups:', error);
