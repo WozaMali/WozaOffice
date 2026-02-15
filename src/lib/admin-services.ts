@@ -444,6 +444,7 @@ export async function getUsersByDateRange(
   endDate?: Date
 ): Promise<Profile[]> {
   console.log(`🔍 Fetching users created between ${startDate.toISOString()} and ${endDate?.toISOString() || 'now'}...`);
+  const supabase = getSupabaseClient();
   
   try {
     const end = endDate || new Date();
