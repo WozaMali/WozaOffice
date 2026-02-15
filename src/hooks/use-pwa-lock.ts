@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { logAdminSessionEvent } from "@/lib/admin-session-logging";
 
@@ -103,6 +103,7 @@ export function usePwaLock(lockAfterMinutes: number = 30) {
 		const salt = randomSaltHex(16);
 		const saltedHash = await sha256Hex(`${salt}::${pin}`);
 		try {
+			const supabase = getSupabaseClient();
 			const { error } = await supabase
 				.from('user_pins')
 				.upsert({ user_id: user.id, username, salt, salted_hash: saltedHash, last_changed_at: new Date().toISOString() }, { onConflict: 'user_id' });
@@ -122,6 +123,7 @@ export function usePwaLock(lockAfterMinutes: number = 30) {
 		if (!/^\d{5}$/.test(pin)) return { success: false, error: "PIN must be 5 digits" };
 		if (!user?.id) return { success: false, error: "Not authenticated" };
 		try {
+			const supabase = getSupabaseClient();
 			const { data, error } = await supabase
 				.from('user_pins')
 				.select('username, salt, salted_hash')
@@ -173,6 +175,7 @@ export function usePwaLock(lockAfterMinutes: number = 30) {
 			}
 			
 			try {
+				const supabase = getSupabaseClient();
 				const { data } = await supabase
 					.from('user_pins')
 					.select('username')

@@ -14,7 +14,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { UnifiedAdminService } from '@/lib/unified-admin-service';
 import type { CollectionData } from '@/lib/unified-admin-service';
 import { useAuth } from '@/hooks/use-auth';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { useBackgroundRefresh } from '@/hooks/useBackgroundRefresh';
 import { useRealtimeConnection } from '@/hooks/useRealtimeConnection';
 import { backgroundRefreshService } from '@/lib/backgroundRefreshService';
@@ -44,23 +44,21 @@ export default function CollectionsContent() {
   const [selectedCollectionForReset, setSelectedCollectionForReset] = useState<{ id: string; name: string } | null>(null);
   const isSuperAdmin = profile?.role === 'superadmin' || profile?.role === 'super_admin' || profile?.role === 'SUPER_ADMIN';
   
-  // Fetch collections function - optimized for speed
+  // Fetch collections function - optimized for speed with better error handling
   const loadCollections = useCallback(async () => {
     try {
       console.log('🔄 Collections: Starting loadCollections...');
       setError(null);
       setLoading(true);
       
-      const directQueryPromise = UnifiedAdminService.getAllCollections();
-      const timeoutPromise = new Promise<{ data: CollectionData[] | null, error: any }>((resolve) => 
-        setTimeout(() => resolve({ data: null, error: new Error('Query timeout (120s)') }), 120000)
-      );
-      
-      const { data, error: fetchError } = await Promise.race([directQueryPromise, timeoutPromise]);
+      // Use the service method which has its own timeout handling
+      const { data, error: fetchError } = await UnifiedAdminService.getAllCollections();
       
       if (fetchError) {
         console.error('❌ Collections: Error loading from unified_collections:', fetchError);
-        setError(fetchError);
+        // Provide user-friendly error message
+        const errorMessage = fetchError?.message || 'Failed to load collections';
+        setError(new Error(errorMessage));
         setRows([]);
       } else {
         console.log('📊 Collections: Loaded', data?.length || 0, 'collections from unified_collections');
@@ -70,7 +68,8 @@ export default function CollectionsContent() {
       setLoading(false);
     } catch (err) {
       console.error('❌ Collections: Exception loading from unified_collections:', err);
-      setError(err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(new Error(errorMessage));
       setRows([]);
       setLoading(false);
     }
@@ -246,7 +245,7 @@ export default function CollectionsContent() {
           resolvedPhotos.push(ph);
         } else if (raw) {
           try {
-            const { data: pub } = supabase.storage
+            const { data: pub } = getSupabaseClient().storage
               .from('collection-photos')
               .getPublicUrl(raw);
             resolvedPhotos.push({ ...ph, photo_url: pub.publicUrl });
@@ -259,13 +258,13 @@ export default function CollectionsContent() {
       // 2) Fallback: if nothing in table, try listing storage by prefix `${collectionId}/`
       if (resolvedPhotos.length === 0) {
         try {
-          const { data: files, error: listErr } = await supabase.storage
+          const { data: files, error: listErr } = await getSupabaseClient().storage
             .from('collection-photos')
             .list(`${collectionId}`, { limit: 100 });
           if (!listErr && Array.isArray(files)) {
             for (const f of files) {
               const path = `${collectionId}/${f.name}`;
-              const { data: pub } = supabase.storage
+              const { data: pub } = getSupabaseClient().storage
                 .from('collection-photos')
                 .getPublicUrl(path);
               resolvedPhotos.push({ id: path, collection_id: collectionId, photo_url: pub.publicUrl, photo_type: 'general' });

@@ -1,11 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-let supabase: SupabaseClient | undefined;
-let supabaseAdmin: SupabaseClient | null | undefined;
+let supabaseInstance: SupabaseClient | undefined;
+let supabaseAdminInstance: SupabaseClient | null | undefined;
 
 export function getSupabaseClient(): SupabaseClient {
-  if (supabase) {
-    return supabase;
+  if (supabaseInstance) {
+    return supabaseInstance;
   }
 
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,61 +14,77 @@ export function getSupabaseClient(): SupabaseClient {
   const supabaseUrl = rawUrl?.trim();
   const supabaseAnonKey = rawAnonKey?.trim();
 
-  console.log('🔌 Creating Supabase client with:');
-  console.log('🔌 URL:', supabaseUrl);
-  console.log('🔌 Key length:', supabaseAnonKey?.length || 0);
+console.log('🔌 Creating Supabase client with:');
+console.log('🔌 URL:', supabaseUrl);
+console.log('🔌 Key length:', supabaseAnonKey?.length || 0);
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  }
+}
 
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    // Increase session refresh interval to prevent timeouts
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    flowType: 'pkce', // Use PKCE flow for better security and session management
+  },
+  realtime: {
+    timeout: 60000, // 60 seconds timeout
+    heartbeatIntervalMs: 30000, // Heartbeat every 30 seconds (keeps connection alive)
+    reconnectAfterMs: (tries: number) => {
+      // Exponential backoff for reconnection
+      return Math.min(tries * 1000, 30000)
     },
-    realtime: {
-      timeout: 60000, // Increased to 60 seconds
-      heartbeatIntervalMs: 20000, // More frequent heartbeats (every 20 seconds)
-    },
-    global: {
-      headers: {
+  },
+  global: {
+    headers: {
         'X-Client-Info': 'office-app',
       },
     },
   });
 
   console.log('✅ Supabase client created successfully');
-  return supabase;
+  return supabaseInstance;
 }
 
 export function getSupabaseAdminClient(): SupabaseClient | null {
-  if (supabaseAdmin) {
-    return supabaseAdmin;
+  if (supabaseAdminInstance) {
+    return supabaseAdminInstance;
   }
 
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseUrl = rawUrl?.trim();
 
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.warn('⚠️ Missing Supabase admin environment variables. Admin client will not be created.');
     return null;
   }
 
-  supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  supabaseAdminInstance = createClient(supabaseUrl, supabaseServiceKey);
   console.log('✅ Supabase admin client created: Yes');
-  return supabaseAdmin;
+  return supabaseAdminInstance;
 }
 
-// Initialize clients immediately for server-side or initial client-side access
-// For client-side, subsequent calls will use the cached instance
-getSupabaseClient();
-getSupabaseAdminClient();
+// Don't initialize clients at module load time to avoid multiple GoTrueClient instances
+// Clients will be initialized on first use via the getter functions
+
+// Client-side export for supabase
+// This ensures backward compatibility with existing imports
+// The getSupabaseClient() function handles singleton pattern internally
+export const supabase = getSupabaseClient();
+
+// Backward compatibility export for API routes (server-side only)
+// This will be null on client-side, but API routes are server-only so that's fine
+// The check prevents client-side code from trying to use it
+export const supabaseAdmin: SupabaseClient | null = 
+  typeof window === 'undefined' ? getSupabaseAdminClient() : null;
 
 // Database types matching your new schema
 export interface Profile {

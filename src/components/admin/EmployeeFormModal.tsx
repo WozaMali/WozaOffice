@@ -23,7 +23,7 @@ import {
   Home,
   Briefcase
 } from 'lucide-react';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseClient, getSupabaseAdminClient } from '@/lib/supabase';
 import { UnifiedAdminService } from '@/lib/unified-admin-service';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -120,6 +120,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSuccess, isFirstL
     
     try {
       setLoadingUserData(true);
+      const supabase = getSupabaseClient();
       const { data, error: fetchError } = await supabase
         .from('users')
         .select('*')
@@ -210,7 +211,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSuccess, isFirstL
     
     try {
       // In Vite, API routes don't exist - update user directly via Supabase
-      const client = supabaseAdmin || supabase;
+      const client = getSupabaseAdminClient() || getSupabaseClient();
       
       // Prepare update data from formData
       const updateData: any = {

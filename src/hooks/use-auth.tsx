@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Fetch profile with timeout - try unified users table first
       // Simplified query without join to avoid slow performance
+      const supabase = getSupabaseClient();
       const profilePromise = supabase
         .from('users')
         .select(`
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Silently use minimal profile - this is expected for slow connections
           // The query will continue in background, but we return minimal profile now
           const supabase = getSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await supabase.auth.getSession();
           const email = session?.user?.email || '';
           const roleGuess = email.toLowerCase().includes('superadmin@wozamali.co.za')
             ? 'super_admin'
@@ -179,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Minimal profile derived from session when tables are missing
-      const supabase = getSupabaseClient();
+      // Reuse supabase from line 52
       const { data: { session } } = await supabase.auth.getSession();
       const email = session?.user?.email || '';
       const roleGuess = email.toLowerCase().includes('superadmin@wozamali.co.za')
@@ -570,7 +571,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(session.user);
             const userProfile = await fetchProfile(session.user.id);
             if (userProfile) {
-              setProfile(userProfile);
+            setProfile(userProfile);
             } else {
               // If profile fetch fails, it might indicate an invalid session or user
               console.warn('🔐 useAuth: Profile fetch failed after SIGNED_IN. Forcing logout.');

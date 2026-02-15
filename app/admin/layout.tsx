@@ -22,7 +22,10 @@ import {
   LogOut,
   Shield,
   Sparkles,
-  Bell
+  Bell,
+  Video,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -31,7 +34,7 @@ import RealtimeStatusDot from '@/components/RealtimeStatusDot';
 import Link from 'next/link';
 import AddUserModal from './AddUserModalSimple';
 import { logAdminSessionEvent } from '@/lib/admin-session-logging';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { ExportRequestNotificationBell } from '@/components/admin/ExportRequestNotificationBell';
 import EmployeeFormModal from '@/components/admin/EmployeeFormModal';
 
@@ -53,11 +56,26 @@ export default function AdminLayout({
   const [showEmployeeFormModal, setShowEmployeeFormModal] = useState(false);
   const isPrivileged = isSuperAdmin;
   const employeeFormCheckRef = useRef(false);
+  
+  // Sidebar collapse state - load from localStorage
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Ensure component is mounted to avoid hydration mismatches
   useEffect(() => {
     setMounted(true);
+    // Load sidebar state from localStorage
+    const savedState = localStorage.getItem('sidebarCollapsed');
+    if (savedState !== null) {
+      setSidebarCollapsed(savedState === 'true');
+    }
   }, []);
+
+  // Save sidebar state to localStorage when it changes
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('sidebarCollapsed', String(sidebarCollapsed));
+    }
+  }, [sidebarCollapsed, mounted]);
 
   // Build navigation in requested order (Team Members appears after Users for superadmin only)
   // Use useMemo to ensure stable reference and avoid hydration mismatches
@@ -66,6 +84,7 @@ export default function AdminLayout({
   const baseNavigation = useMemo(() => [
     { name: 'Dashboard', page: 'dashboard', href: '/admin/dashboard', icon: BarChart3 },
     { name: 'Collections', page: 'collections', href: '/admin/collections', icon: Calendar },
+    { name: 'Watch AD Earnings', page: 'watch-ads-earnings', href: '/admin/watch-ads-earnings', icon: Video },
     { name: 'Pickups', page: 'pickups', href: '/admin/pickups', icon: Package },
     { name: 'Withdrawals', page: 'withdrawals', href: '/admin/withdrawals', icon: CreditCard },
     { name: 'Rewards', page: 'rewards', href: '/admin/rewards', icon: Gift },
@@ -165,6 +184,7 @@ export default function AdminLayout({
           return; // Not an admin user, no need to check
         }
 
+        const supabase = getSupabaseClient();
         const { data: userData, error } = await supabase
           .from('users')
           .select('employee_form_completed, role')
@@ -220,22 +240,43 @@ export default function AdminLayout({
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Sidebar */}
-      <div className="w-64 bg-gradient-to-b from-gray-900 to-gray-800 border-r border-gray-700 min-h-screen p-4 shadow-2xl">
-        {/* Logo */}
-        <div className="flex items-center justify-between mb-8 px-2">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 flex items-center justify-center shadow-lg">
+      <div className={`${sidebarCollapsed ? 'w-20' : 'w-64'} bg-black border-r border-gray-800 min-h-screen ${sidebarCollapsed ? 'p-2' : 'p-4'} shadow-2xl transition-all duration-300 ease-in-out relative`}>
+        {/* Logo and Collapse Button */}
+        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} mb-8 ${sidebarCollapsed ? 'px-0' : 'px-2'}`}>
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-xl flex items-center justify-center">
+                <img 
+                  src="/w yellow.png" 
+                  alt="Woza Mali Logo" 
+                  className="w-12 h-12"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Admin Portal</p>
+              </div>
+            </div>
+          )}
+          {sidebarCollapsed && (
+            <div className="w-16 h-16 rounded-xl flex items-center justify-center">
               <img 
                 src="/w yellow.png" 
                 alt="Woza Mali Logo" 
-                className="w-8 h-8"
+                className="w-12 h-12"
               />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Woza Mali</h2>
-              <p className="text-xs text-gray-300">Admin Portal</p>
-            </div>
-          </div>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`p-2 rounded-lg hover:bg-gray-700 text-gray-300 hover:text-white transition-colors ${sidebarCollapsed ? 'w-full' : ''}`}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="h-5 w-5 mx-auto" />
+            ) : (
+              <ChevronLeft className="h-5 w-5" />
+            )}
+          </button>
         </div>
 
         {/* Navigation */}
@@ -247,21 +288,27 @@ export default function AdminLayout({
               <Link
                 key={item.name}
                 href={item.href}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg transform scale-105'
-                    : 'text-gray-300 hover:text-white hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-600 hover:shadow-md'
+                    ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-700 hover:shadow-md'
                 }`}
+                title={sidebarCollapsed ? item.name : undefined}
               >
-                <item.icon className="h-5 w-5" />
-                <span>{item.name}</span>
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                {!sidebarCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
+                {sidebarCollapsed && (
+                  <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity border border-gray-700">
+                    {item.name}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
         {/* Sign out */}
-        <div className="mt-8 pt-4 border-t border-gray-700">
+        <div className="mt-8 pt-4 border-t border-gray-800">
           <button
             onClick={async (e) => {
               e.preventDefault();
@@ -276,10 +323,16 @@ export default function AdminLayout({
                 window.location.href = '/admin-login';
               }
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-red-200 hover:text-white hover:bg-gradient-to-r hover:from-red-700 hover:to-red-600 transition-all duration-300"
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-semibold text-red-200 hover:text-white hover:bg-red-700 transition-all duration-300 group relative`}
+            title={sidebarCollapsed ? 'Sign out' : undefined}
           >
-            <LogOut className="h-5 w-5" />
-            <span>Sign out</span>
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            {!sidebarCollapsed && <span>Sign out</span>}
+            {sidebarCollapsed && (
+              <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity border border-gray-700">
+                Sign out
+              </span>
+            )}
           </button>
         </div>
       </div>

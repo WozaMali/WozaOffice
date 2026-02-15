@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 
 // POST - Start tracking a video watch
 export async function POST(request: NextRequest) {
   try {
-    if (!getSupabaseAdminClient()) {
+    if (!supabaseAdmin) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user can watch this video
-    const { data: canWatch, error: canWatchError } = await getSupabaseAdminClient().rpc(
+    const { data: canWatch, error: canWatchError } = await supabaseAdmin.rpc(
       'can_user_watch_video',
       {
         p_user_id: user_id,
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create watch record
-    const { data: watch, error } = await getSupabaseAdminClient()
+    const { data: watch, error } = await supabaseAdmin
       .from('video_watches')
       .insert({
         user_id,
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 // PUT - Update video watch progress and complete it
 export async function PUT(request: NextRequest) {
   try {
-    if (!getSupabaseAdminClient()) {
+    if (!supabaseAdmin) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update watch record
-    const { data: watch, error } = await getSupabaseAdminClient()
+    const { data: watch, error } = await supabaseAdmin
       .from('video_watches')
       .update(updateData)
       .eq('id', watch_id)
@@ -126,7 +126,7 @@ export async function PUT(request: NextRequest) {
     // If completed and qualifies, award credits to wallet
     if (is_completed && watch && !watch.is_qualified) {
       try {
-        const { data: awardResult, error: awardError } = await getSupabaseAdminClient().rpc(
+        const { data: awardResult, error: awardError } = await supabaseAdmin.rpc(
           'award_video_watch_credits',
           {
             p_watch_id: watch_id
@@ -143,7 +143,7 @@ export async function PUT(request: NextRequest) {
           });
         } else if (awardResult?.success) {
           // Reload watch to get updated credits_awarded
-          const { data: updatedWatch } = await getSupabaseAdminClient()
+          const { data: updatedWatch } = await supabaseAdmin
             .from('video_watches')
             .select('*')
             .eq('id', watch_id)
@@ -187,7 +187,7 @@ export async function PUT(request: NextRequest) {
 // GET - Get user's video watch history
 export async function GET(request: NextRequest) {
   try {
-    if (!getSupabaseAdminClient()) {
+    if (!supabaseAdmin) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },
         { status: 500 }
@@ -204,7 +204,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data: watches, error } = await getSupabaseAdminClient()
+    const { data: watches, error } = await supabaseAdmin
       .from('video_watches')
       .select(`
         *,

@@ -87,31 +87,59 @@ export class UnifiedAdminService {
   // ============================================================================
       static async getDashboardData(): Promise<{ data: AdminDashboardData | null; error: any }> {
     try {
+      console.log('🔍 UnifiedAdminService: Starting getDashboardData...');
       const supabase = getSupabaseClient();
+      
+      // Helper function to add timeout to queries
+      const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) => 
+            setTimeout(() => reject(new Error(`Query timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      };
+      
       // Load all data in parallel for maximum speed
       const [userCountResult, collectionsResult, rolesResult, walletsResult] = await Promise.allSettled([
         // User counts - use count queries to avoid 1000-row limit
         (async () => {
           try {
+            console.log('🔍 UnifiedAdminService: Fetching user counts...');
             // Get total users count
-            const totalResult = await supabase.from('users').select('id', { count: 'exact', head: true });
+            const totalResult = await withTimeout(
+              supabase.from('users').select('id', { count: 'exact', head: true }),
+              5000
+            );
             // Get active users count
-            let activeResult = await supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active');
+            let activeResult = await withTimeout(
+              supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+              5000
+            );
             if (activeResult.error) {
               // Fallback to profiles
-              activeResult = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true);
+              activeResult = await withTimeout(
+                supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_active', true),
+                5000
+              );
             }
             // Get role breakdown using count queries (much faster than fetching all)
             // Note: role might be in role_id or role field, we'll try both
             const [residentResult, collectorResult, adminResult] = await Promise.allSettled([
               (async () => {
                 try {
-                  const result = await supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('role', 'resident');
+                  const result = await withTimeout(
+                    supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('role', 'resident'),
+                    5000
+                  );
                   return result.count || 0;
                 } catch {
                   try {
                     // Try with role_id if role field doesn't work
-                    const result = await supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active');
+                    const result = await withTimeout(
+                      supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+                      5000
+                    );
                     // If we can't filter by role, we'll estimate based on total
                     return 0;
                   } catch {
@@ -121,7 +149,10 @@ export class UnifiedAdminService {
               })(),
               (async () => {
                 try {
-                  const result = await supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('role', 'collector');
+                  const result = await withTimeout(
+                    supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('role', 'collector'),
+                    5000
+                  );
                   return result.count || 0;
                 } catch {
                   return 0;
@@ -129,7 +160,10 @@ export class UnifiedAdminService {
               })(),
               (async () => {
                 try {
-                  const result = await supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('role', 'admin');
+                  const result = await withTimeout(
+                    supabase.from('users').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('role', 'admin'),
+                    5000
+                  );
                   return result.count || 0;
                 } catch {
                   return 0;
@@ -151,33 +185,55 @@ export class UnifiedAdminService {
         // Collections data
         (async () => {
           try {
-            const result = await supabase.from('unified_collections').select('id, status, weight_kg, total_weight_kg, computed_value, total_value');
+            console.log('🔍 UnifiedAdminService: Fetching collections...');
+            const result = await withTimeout(
+              supabase.from('unified_collections').select('id, status, weight_kg, total_weight_kg, computed_value, total_value'),
+              10000
+            );
             if (result.error) throw result.error;
+            console.log('✅ UnifiedAdminService: Collections fetched:', result.data?.length || 0);
             return result.data || [];
-          } catch {
+          } catch (err) {
+            console.error('❌ UnifiedAdminService: Collections query failed:', err);
             return [];
           }
         })(),
         // Roles mapping (non-blocking, can fail)
         (async () => {
           try {
-            const result = await supabase.from('roles').select('id, name');
+            console.log('🔍 UnifiedAdminService: Fetching roles...');
+            const result = await withTimeout(
+              supabase.from('roles').select('id, name'),
+              5000
+            );
+            console.log('✅ UnifiedAdminService: Roles fetched:', result.data?.length || 0);
             return result.data || [];
-          } catch {
+          } catch (err) {
+            console.error('❌ UnifiedAdminService: Roles query failed:', err);
             return [];
           }
         })(),
         // Wallet data (non-blocking, can fail)
         (async () => {
           try {
-            const result = await supabase.from('user_wallets').select('current_points, total_points_earned, total_points_spent');
+            console.log('🔍 UnifiedAdminService: Fetching wallets...');
+            const result = await withTimeout(
+              supabase.from('user_wallets').select('current_points, total_points_earned, total_points_spent'),
+              5000
+            );
             if (result.error && (result.error.code === 'PGRST205' || result.error.message?.includes("Could not find the table 'public.user_wallets'"))) {
-              const fallback = await supabase.from('wallets').select('balance, total_points');
+              console.log('⚠️ UnifiedAdminService: user_wallets not found, trying wallets table...');
+              const fallback = await withTimeout(
+                supabase.from('wallets').select('balance, total_points'),
+                5000
+              );
               return fallback.data || [];
             }
             if (result.error) throw result.error;
+            console.log('✅ UnifiedAdminService: Wallets fetched:', result.data?.length || 0);
             return result.data || [];
-          } catch {
+          } catch (err) {
+            console.error('❌ UnifiedAdminService: Wallets query failed:', err);
             return [];
           }
         })()
@@ -187,6 +243,22 @@ export class UnifiedAdminService {
       const collections = collectionsResult.status === 'fulfilled' ? collectionsResult.value : [];
       const roles = rolesResult.status === 'fulfilled' ? rolesResult.value : [];
       const wallets = walletsResult.status === 'fulfilled' ? walletsResult.value : [];
+      
+      console.log('🔍 UnifiedAdminService: Query results:', {
+        userCounts,
+        collectionsCount: collections.length,
+        rolesCount: roles.length,
+        walletsCount: wallets.length,
+        userCountResultStatus: userCountResult.status,
+        collectionsResultStatus: collectionsResult.status
+      });
+      
+      if (userCountResult.status === 'rejected') {
+        console.error('❌ UnifiedAdminService: User count query failed:', userCountResult.reason);
+      }
+      if (collectionsResult.status === 'rejected') {
+        console.error('❌ UnifiedAdminService: Collections query failed:', collectionsResult.reason);
+      }
       
       // Extract counts from the count query result
       const totalResidents = userCounts.residents || 0;
@@ -228,6 +300,7 @@ export class UnifiedAdminService {
         totalPointsSpent
       };
 
+      console.log('✅ UnifiedAdminService: Dashboard data computed:', dashboardData);
       return { data: dashboardData, error: null };
     } catch (error) {
       console.error('Error in getDashboardData:', error);
@@ -446,10 +519,13 @@ export class UnifiedAdminService {
       const supabase = getSupabaseClient();
       // Simplified fast query - use denormalized data from unified_collections
       // This avoids complex joins and multiple queries that cause timeouts
-      console.log('🔄 getAllCollections: Starting simplified fetch...');
+      console.log('🔄 getAllCollections: Starting optimized fetch...');
       
-      // Optimized query - fetch only essential fields first, then transform
-      // This reduces the amount of data transferred and speeds up the query
+      // Optimized query - fetch only essential fields, reduced limit for performance
+      // Using a smaller limit initially to prevent timeouts, can be increased if needed
+      const startTime = Date.now();
+      
+      // Create a timeout wrapper for the query
       const queryPromise = supabase
         .from('unified_collections')
         .select(`
@@ -474,12 +550,19 @@ export class UnifiedAdminService {
           pickup_address
         `)
         .order('created_at', { ascending: false })
-        .limit(1000); // Increased limit but query should still be fast with proper indexing
+        .limit(500); // Reduced limit for better performance - can paginate if needed
       
-      // Execute query directly - Supabase has its own timeout handling
-      // Remove the race condition timeout as it may be causing premature failures
-      const startTime = Date.now();
-      const baseResp = await queryPromise;
+      // Add a reasonable timeout (30 seconds) to prevent hanging
+      const timeoutPromise = new Promise<{ data: any[] | null; error: any }>((resolve) => {
+        setTimeout(() => {
+          resolve({ 
+            data: null, 
+            error: { message: 'Query timeout - database may be slow. Try refreshing.' } 
+          });
+        }, 30000); // 30 second timeout
+      });
+      
+      const baseResp = await Promise.race([queryPromise, timeoutPromise]);
       const queryTime = Date.now() - startTime;
       console.log(`⏱️ Query executed in ${queryTime}ms`);
 
@@ -551,7 +634,6 @@ export class UnifiedAdminService {
 
   static async updateCollectionStatus(collectionId: string, status: string, notes?: string): Promise<{ data: CollectionData | null; error: any }> {
     try {
-      const supabase = getSupabaseClient();
       // Use RPCs for approved/rejected to ensure wallet/fund/points post atomically
       if (status === 'approved' || status === 'rejected') {
         const { data: authData, error: authErr } = await supabase.auth.getUser();
@@ -681,7 +763,6 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getTownships(): Promise<{ data: TownshipDropdown[] | null; error: any }> {
     try {
-      const supabase = getSupabaseClient();
       // Use the same source as Main App and constrain to Soweto
       const { data, error } = await supabase
         .from('address_townships')
@@ -709,7 +790,6 @@ export class UnifiedAdminService {
 
   static async getSubdivisions(townshipId: string): Promise<{ data: SubdivisionDropdown[] | null; error: any }> {
     try {
-      const supabase = getSupabaseClient();
       // Use the same source as Main App
       const { data, error } = await supabase
         .from('address_subdivisions')
@@ -755,7 +835,6 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getMaterials(): Promise<{ data: Material[] | null; error: any }> {
     try {
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('materials')
         .select('*')
@@ -779,7 +858,6 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getRecentActivity(limit: number = 20): Promise<{ data: RecentActivity[] | null; error: any }> {
     try {
-      const supabase = getSupabaseClient();
       const activities: RecentActivity[] = [];
 
       // Get recent collections
@@ -883,7 +961,6 @@ export class UnifiedAdminService {
   // ============================================================================
   static async getWalletData(): Promise<{ data: any | null; error: any }> {
     try {
-      const supabase = getSupabaseClient();
       // Try unified table then fallback to legacy wallets
       let walletsResp = await supabase
         .from('user_wallets')
@@ -941,15 +1018,51 @@ export function useDashboardData() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await UnifiedAdminService.getDashboardData();
+      try {
+        const response = await fetch('/api/admin/dashboard', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store', // Always fetch fresh data
+        });
 
-      if (error) {
-        setError(error);
-      } else {
-        setData(data);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const apiData = await response.json();
+
+        if (apiData.error) {
+          setError(new Error(apiData.error));
+          setData(null);
+        } else {
+          // Map API response to AdminDashboardData format
+          const dashboardData: AdminDashboardData = {
+            totalUsers: apiData.totalUsers || 0,
+            totalResidents: apiData.totalResidents || 0,
+            totalCollectors: apiData.totalCollectors || 0,
+            totalAdmins: apiData.totalAdmins || 0,
+            totalCollections: apiData.totalCollections || 0,
+            totalWeight: apiData.totalWeight || 0,
+            totalRevenue: apiData.totalRevenue || 0,
+            pendingCollections: apiData.pendingCollections || 0,
+            approvedCollections: apiData.approvedCollections || 0,
+            rejectedCollections: apiData.rejectedCollections || 0,
+            totalWallets: apiData.totalWallets || 0,
+            totalWalletBalance: apiData.totalWalletBalance || 0,
+            totalPointsEarned: apiData.totalPointsEarned || 0,
+            totalPointsSpent: apiData.totalPointsSpent || 0,
+          };
+          setData(dashboardData);
+        }
+      } catch (err: any) {
+        console.error('❌ useDashboardData: Error fetching dashboard data:', err);
+        setError(err);
+        setData(null);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchData();

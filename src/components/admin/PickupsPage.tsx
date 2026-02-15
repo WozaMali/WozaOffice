@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { getPickups, subscribeToPickups, updatePickupStatus, assignCollectorToCollection, deleteCollectionDeep, clearPickupsCache, formatDate, formatCurrency, formatWeight, TransformedPickup } from '@/lib/admin-services';
 import { softDeleteCollection } from '@/lib/soft-delete-service';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 
 function getDisplayName(fullName?: string, email?: string): string {

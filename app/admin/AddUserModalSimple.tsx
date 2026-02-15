@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, UserPlus, Mail, Phone, Shield, UserCheck, Users, User, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -36,6 +36,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
 
   const generateEmployeeNumber = async (): Promise<string> => {
     try {
+      const supabase = getSupabaseClient();
       const { data: latest } = await supabase
         .from('users')
         .select('employee_number')
@@ -64,6 +65,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess }: AddUserModa
     if (uuidRegex.test(input)) return input;
 
     // Try find area by name (case-insensitive)
+    const supabase = getSupabaseClient();
     const { data: found, error: findError } = await supabase
       .from('areas')
       .select('id')

@@ -194,8 +194,11 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
   // Login Ad modal
   const [loginAd, setLoginAd] = useState<LoginPopupAd | null>(null)
   const [showLoginAd, setShowLoginAd] = useState(false)
+  const [imageLoadError, setImageLoadError] = useState(false)
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const run = async () => {
       try {
         const ad = await getActiveLoginPopupAd()
@@ -205,14 +208,34 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
         const seen = sessionStorage.getItem(seenKey)
         if (!seen) {
           setLoginAd(ad)
+          setImageLoadError(false) // Reset error state for new ad
           setShowLoginAd(true)
           sessionStorage.setItem(seenKey, '1')
+          
+          // Fallback: If image doesn't load within 3 seconds, assume it's blocked
+          // This handles cases where onError might not fire due to ad blockers
+          if (ad.imageUrl) {
+            timeoutId = setTimeout(() => {
+              // Check if image is still not loaded (no natural width/height)
+              const img = document.querySelector(`img[src="${ad.imageUrl}"]`) as HTMLImageElement;
+              if (img && (!img.naturalWidth || !img.naturalHeight)) {
+                console.warn('Login ad image may be blocked by ad blocker (timeout)');
+                setImageLoadError(true);
+              }
+            }, 3000);
+          }
         }
       } catch {
         // ignore
       }
     }
+    
     run()
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [])
 
   // Initialize keepalive manager and global refresh signals
@@ -399,7 +422,7 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
               {loginAd?.description && (
                 <p className="text-sm text-gray-600">{loginAd.description}</p>
               )}
-              {loginAd?.imageUrl && (
+              {loginAd?.imageUrl && !imageLoadError && (
                 <div 
                   onClick={() => {
                     if (loginAd?.ctaUrl) {
@@ -417,7 +440,22 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
                       ...(loginAd.width ? { width: `${loginAd.width}px`, maxWidth: '100%' } : {}),
                       ...(loginAd.height ? { height: `${loginAd.height}px` } : {})
                     }}
+                    onError={(e) => {
+                      // Handle image load errors (e.g., blocked by ad blocker)
+                      console.warn('Login ad image failed to load (may be blocked by ad blocker):', loginAd.imageUrl);
+                      setImageLoadError(true);
+                      // Prevent infinite retry loop
+                      e.currentTarget.onerror = null;
+                    }}
                   />
+                </div>
+              )}
+              {loginAd?.imageUrl && imageLoadError && (
+                <div className="p-4 bg-gray-100 rounded-lg text-center text-sm text-gray-500">
+                  <p>Image unavailable (may be blocked by browser extension)</p>
+                  {loginAd?.description && (
+                    <p className="mt-2">{loginAd.description}</p>
+                  )}
                 </div>
               )}
               {loginAd?.ctaUrl && (

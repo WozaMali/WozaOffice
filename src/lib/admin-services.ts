@@ -567,6 +567,8 @@ export async function bulkDeleteUsersByDateRange(
         }
         
         // Delete from users table
+        const supabase = getSupabaseClient();
+        const supabaseAdmin = getSupabaseAdminClient();
         const { error: deleteError } = await supabase
           .from('users')
           .delete()
@@ -579,7 +581,9 @@ export async function bulkDeleteUsersByDateRange(
         
         // Try to delete from auth (may fail if user doesn't exist in auth)
         try {
-          await supabase.auth.admin.deleteUser(user.id);
+          if (supabaseAdmin) {
+            await supabaseAdmin.auth.admin.deleteUser(user.id);
+          }
         } catch (authError: any) {
           // Ignore auth errors - user might not exist in auth
           console.log(`ℹ️ Could not delete from auth for ${user.email}: ${authError.message}`);
@@ -729,6 +733,7 @@ export async function bulkCreateUsersFromNames(
   let createdCount = 0;
   const errors: Array<{ name: string; error: string }> = [];
   
+  const supabase = getSupabaseClient();
   // Get role ID
   const { data: roleData, error: roleError } = await supabase
     .from('roles')
@@ -818,8 +823,13 @@ export async function createUser(userData: {
   console.log(`➕ Creating new user: ${userData.email}...`);
   
   try {
+    const supabase = getSupabaseClient();
+    const supabaseAdmin = getSupabaseAdminClient();
     // First, create the user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    if (!supabaseAdmin) {
+      throw new Error('Admin client not available');
+    }
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
       password: 'TempPassword123!', // Temporary password that user will need to change
       email_confirm: true, // Auto-confirm email
@@ -858,7 +868,9 @@ export async function createUser(userData: {
     if (profileError) {
       console.error('❌ Error creating user profile:', profileError);
       // Try to clean up the auth user if profile creation failed
-      await supabase.auth.admin.deleteUser(authData.user.id);
+      if (supabaseAdmin) {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      }
       throw profileError;
     }
 
@@ -914,6 +926,7 @@ export async function getPickups(): Promise<TransformedPickup[]> {
   
   try {
     // Unified-only source
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('unified_collections')
       .select('id, customer_id, pickup_address_id, total_weight_kg, computed_value, total_value, status, created_at, updated_at, customer_name, customer_email, collector_name, pickup_address')
@@ -985,6 +998,7 @@ export async function getPickups(): Promise<TransformedPickup[]> {
 
 export function subscribeToPickups(callback: RealtimeCallback<any>) {
   // Single channel listening to all potential sources
+  const supabase = getSupabaseClient();
   return supabase
     .channel('pickups_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pickups' }, (payload) => {
@@ -1006,6 +1020,7 @@ export async function updatePickupStatus(pickupId: string, status: string, appro
   console.log(`🔄 Updating collection ${pickupId} status to: ${status}`);
 
   try {
+    const supabase = getSupabaseClient();
     // Prefer unified_collections; fallback to collections
     let isUnified = true;
     let existsResp = await supabase
@@ -1184,7 +1199,8 @@ export async function getPayments(): Promise<Payment[]> {
 
     // Fetch customer profiles for the pickups (using customer_id)
     const customerIds = Array.from(new Set(pickups?.map(p => p.customer_id).filter(Boolean) || []));
-    const { data: customerProfiles } = customerIds.length > 0 ? await supabase
+    const supabaseForProfiles = getSupabaseClient();
+    const { data: customerProfiles } = customerIds.length > 0 ? await supabaseForProfiles
       .from('profiles')
       .select('id, full_name, email, phone')
       .in('id', customerIds) : { data: [] };
@@ -1323,11 +1339,12 @@ export async function getWithdrawalsFallbackFromCollections(params?: { collectio
     // Fetch user names by customer_id (user_profiles) and by email (users) for display
     const profileIds = Array.from(new Set(rows.map(r => r.customer_id).filter(Boolean)));
     const emails = Array.from(new Set(rows.map(r => String(r.customer_email || '').toLowerCase()).filter(Boolean)));
-    const { data: profiles } = profileIds.length > 0 ? await supabase
+    const supabaseForUsers = getSupabaseClient();
+    const { data: profiles } = profileIds.length > 0 ? await supabaseForUsers
       .from('user_profiles')
       .select('id, full_name, email')
       .in('id', profileIds) : { data: [] } as any;
-    const { data: usersByEmail } = emails.length > 0 ? await supabase
+    const { data: usersByEmail } = emails.length > 0 ? await supabaseForUsers
       .from('users')
       .select('email, full_name')
       .in('email', emails) : { data: [] } as any;
@@ -1645,6 +1662,7 @@ export async function getWalletData() {
     }
 
     // First try unified table `user_wallets`
+    const supabase = getSupabaseClient();
     let source: 'user_wallets' | 'wallets' = 'user_wallets';
     let walletsResp = await supabase
       .from('user_wallets')

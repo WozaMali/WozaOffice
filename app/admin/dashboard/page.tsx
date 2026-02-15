@@ -27,7 +27,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { keepAliveManager } from '@/lib/keepalive-manager';
-import { UnifiedAdminService, useDashboardData } from '@/lib/unified-admin-service';
+import { UnifiedAdminService } from '@/lib/unified-admin-service';
 import { notificationManager } from '@/lib/notificationManager';
 import { useBackgroundRefresh } from '@/hooks/useBackgroundRefresh';
 import { useRealtimeConnection } from '@/hooks/useRealtimeConnection';
@@ -87,8 +87,6 @@ export default function DashboardPage() {
   
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-
-  const { data: unifiedDashboardData, loading: unifiedLoading, error: unifiedError } = useDashboardData();
   
   const isInitialLoadRef = useRef<boolean>(true);
   const hasLoadedUnifiedDataRef = useRef<boolean>(false);
@@ -136,49 +134,82 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // Fetch dashboard data function - Use direct Supabase queries (Vite doesn't have API routes)
+  // Fetch dashboard data function - Use API route (server-side with admin client bypasses RLS)
   const fetchDashboardData = useCallback(async () => {
-    console.log('🔄 Dashboard: Fetching dashboard data...');
+    console.log('🔄 Dashboard: Fetching dashboard data from API...');
+    setLoading(true); // Ensure loading is set to true when starting
     try {
-      const { UnifiedAdminService } = await import('@/lib/unified-admin-service');
-      const { data, error } = await UnifiedAdminService.getDashboardData();
+      const response = await fetch('/api/admin/dashboard', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store', // Always fetch fresh data
+      });
       
-      if (error) {
-        console.error('❌ Dashboard: Error fetching dashboard data:', error);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        console.error('❌ Dashboard: Error from API:', data.error);
         setLoading(false);
+        // Still update with zeros so UI shows something
+        updateDashboardData({
+          totalUsers: 0,
+          totalPickups: 0,
+          totalWeight: 0,
+          totalRevenue: 0,
+          activeUsers: 0,
+          pendingPickups: 0,
+          totalPayments: 0,
+          pendingPayments: 0,
+          totalWallets: 0,
+          totalCashBalance: 0,
+          totalCurrentPoints: 0,
+          totalPointsEarned: 0,
+          totalPointsSpent: 0,
+          totalLifetimeEarnings: 0,
+          totalVideoCredits: 0,
+          walletPermissionError: true,
+          walletErrorMessage: data.error || 'Failed to load dashboard data'
+        });
         return;
       }
       
-      if (!data) {
-        console.warn('⚠️ Dashboard: No data returned');
-        setLoading(false);
-        return;
-      }
+      console.log('✅ Dashboard: Data fetched successfully from API:', data);
+      console.log('✅ Dashboard: Data breakdown:', {
+        totalUsers: data.totalUsers,
+        totalCollections: data.totalCollections,
+        totalWeight: data.totalWeight,
+        totalRevenue: data.totalRevenue,
+        pendingCollections: data.pendingCollections
+      });
       
-      console.log('✅ Dashboard: Data fetched successfully:', data);
-      setLoading(false);
-      
-      startTransition(() => {
+      // Update data immediately, don't wait for transition
         updateDashboardData({
           totalUsers: data.totalUsers || 0,
           totalPickups: data.totalCollections || 0,
           totalWeight: data.totalWeight || 0,
           totalRevenue: data.totalRevenue || 0,
-          activeUsers: data.totalUsers || 0, 
+        activeUsers: data.activeUsers || data.totalUsers || 0, 
           pendingPickups: data.pendingCollections || 0,
-          totalPayments: 0, 
-          pendingPayments: 0, 
+        totalPayments: data.totalPayments || 0, 
+        pendingPayments: data.pendingPayments || 0, 
           totalWallets: data.totalWallets || 0,
           totalCashBalance: data.totalWalletBalance || 0,
           totalCurrentPoints: data.totalWalletBalance || 0, 
           totalPointsEarned: data.totalPointsEarned || 0,
           totalPointsSpent: data.totalPointsSpent || 0,
           totalLifetimeEarnings: data.totalPointsEarned || 0,
-          totalVideoCredits: 0, 
+        totalVideoCredits: data.totalVideoCredits || 0, 
           walletPermissionError: false,
           walletErrorMessage: ''
-        });
       });
+      
+      setLoading(false);
       
       if (isInitialLoadRef.current) {
         isInitialLoadRef.current = false;
@@ -186,7 +217,28 @@ export default function DashboardPage() {
       }
     } catch (error: any) {
       console.error('❌ Dashboard: Exception fetching dashboard data:', error);
+      console.error('❌ Dashboard: Exception stack:', error?.stack);
       setLoading(false);
+      // Update with zeros on error
+      updateDashboardData({
+        totalUsers: 0,
+        totalPickups: 0,
+        totalWeight: 0,
+        totalRevenue: 0,
+        activeUsers: 0,
+        pendingPickups: 0,
+        totalPayments: 0,
+        pendingPayments: 0,
+        totalWallets: 0,
+        totalCashBalance: 0,
+        totalCurrentPoints: 0,
+        totalPointsEarned: 0,
+        totalPointsSpent: 0,
+        totalLifetimeEarnings: 0,
+        totalVideoCredits: 0,
+        walletPermissionError: true,
+        walletErrorMessage: error?.message || 'Unexpected error loading dashboard'
+      });
     }
   }, [updateDashboardData]);
 

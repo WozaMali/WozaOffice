@@ -247,6 +247,27 @@ export interface Material {
   is_active: boolean;
 }
 
+export interface Resident {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  township_id: string | null;
+  created_at: string;
+  street_addr: string | null;
+  subdivision: string | null;
+  city: string | null;
+  postal_code: string | null;
+  areas?: {
+    name: string;
+  }[];
+  // Computed fields
+  full_name?: string;
+  address?: string;
+  hasAddress?: boolean;
+}
+
 // Get collector's pickups with full details
 export async function getCollectorPickups(collectorId: string): Promise<CollectorPickup[]> {
   try {
@@ -399,6 +420,112 @@ export async function getCollectorStats(collectorId: string): Promise<CollectorS
     
     console.log('⚠️ Returning default stats due to error:', defaultStats);
     return defaultStats;
+  }
+}
+
+// Get all resident users
+export async function getAllResidents(options?: {
+  activeOnly?: boolean;
+  includeAddress?: boolean;
+}): Promise<Resident[]> {
+  try {
+    console.log('🔍 Getting all resident users...');
+    const supabase = getSupabaseClient();
+    
+    // Step 1: Get the resident role ID from the roles table
+    const { data: residentRole, error: roleError } = await supabase
+      .from('roles')
+      .select('id')
+      .eq('name', 'resident')
+      .single();
+
+    if (roleError) {
+      console.error('❌ Error getting resident role:', roleError);
+      throw new Error(`Failed to get resident role: ${roleError.message}`);
+    }
+
+    if (!residentRole || !residentRole.id) {
+      console.error('❌ Resident role not found');
+      throw new Error('Resident role not found in database');
+    }
+
+    console.log('✅ Found resident role ID:', residentRole.id);
+
+    // Step 2: Build the query for users
+    let query = supabase
+      .from('users')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        phone,
+        email,
+        township_id,
+        created_at,
+        street_addr,
+        subdivision,
+        city,
+        postal_code,
+        areas!township_id(name)
+      `)
+      .eq('role_id', residentRole.id);
+
+    // Filter by active status if requested
+    if (options?.activeOnly) {
+      query = query.eq('status', 'active');
+    }
+
+    // Order by first name
+    query = query.order('first_name');
+
+    const { data: users, error: usersError } = await query;
+
+    if (usersError) {
+      console.error('❌ Error getting resident users:', usersError);
+      throw new Error(`Failed to get resident users: ${usersError.message}`);
+    }
+
+    console.log(`✅ Retrieved ${users?.length || 0} resident users`);
+
+    // Transform the data to include computed fields
+    const residents: Resident[] = (users || []).map((user) => {
+      const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Unknown';
+      const hasAddress = !!(user.street_addr && user.city);
+      const address = hasAddress
+        ? `${user.street_addr}${user.subdivision ? ', ' + user.subdivision : ''}, ${user.areas?.[0]?.name || 'Unknown Township'}, ${user.city}${user.postal_code ? ' ' + user.postal_code : ''}`.replace(/,\s*,/g, ',').trim()
+        : 'No address provided';
+
+      return {
+        ...user,
+        full_name: fullName,
+        address: options?.includeAddress !== false ? address : undefined,
+        hasAddress,
+      };
+    });
+
+    if (residents.length > 0) {
+      console.log('📋 Sample resident data:', {
+        id: residents[0].id,
+        name: residents[0].full_name,
+        email: residents[0].email,
+        hasAddress: residents[0].hasAddress,
+      });
+    }
+
+    return residents;
+  } catch (error: any) {
+    console.error('❌ Error in getAllResidents:', error);
+    console.error('❌ Error details:', {
+      message: error?.message,
+      details: error?.details,
+      hint: error?.hint,
+      code: error?.code,
+      stack: error?.stack,
+    });
+
+    // Return empty array if there's an error
+    console.log('⚠️ Returning empty residents array due to error');
+    return [];
   }
 }
 

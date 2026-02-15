@@ -14,8 +14,9 @@ type UserRefreshState = {
 
 class BackgroundRefreshService {
   private userStates: Map<string, UserRefreshState> = new Map()
-  private readonly REFRESH_INTERVAL = 30000 // 30 seconds
-  private readonly CACHE_DURATION = 120000 // 2 minutes
+  private readonly REFRESH_INTERVAL = 60000 // 60 seconds (reduced frequency to prevent overload)
+  private readonly CACHE_DURATION = 300000 // 5 minutes (increased cache to reduce queries)
+  private readonly IDLE_REFRESH_INTERVAL = 10 * 60 * 1000 // 10 minutes for idle refresh
 
   /**
    * Start background refresh for a user
@@ -113,6 +114,7 @@ class BackgroundRefreshService {
 
   /**
    * Perform the actual refresh
+   * Works even when tab is hidden to keep data fresh
    */
   private async performRefresh(userId: string, force: boolean = false) {
     const state = this.userStates.get(userId)
@@ -137,10 +139,17 @@ class BackgroundRefreshService {
     state.lastRefresh = Date.now()
 
     try {
-      // Execute all callbacks
+      // Execute all callbacks with timeout protection
       const promises = Array.from(state.callbacks).map(callback => {
         try {
-          return Promise.resolve(callback())
+          // Add timeout to prevent hanging callbacks
+          return Promise.race([
+            Promise.resolve(callback()),
+            new Promise((resolve) => setTimeout(() => {
+              console.warn(`⚠️ Refresh callback timeout for user ${userId}`)
+              resolve(undefined)
+            }, 30000)) // 30 second timeout per callback
+          ])
         } catch (error) {
           console.error('Error in refresh callback:', error)
           return Promise.resolve()
@@ -159,6 +168,7 @@ class BackgroundRefreshService {
       console.log(`✅ Background refresh completed for user ${userId}`)
     } catch (error) {
       console.error(`❌ Background refresh failed for user ${userId}:`, error)
+      // Don't give up - will retry on next interval
     } finally {
       state.isRefreshing = false
     }

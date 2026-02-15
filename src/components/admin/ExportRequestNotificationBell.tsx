@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { performExportToGenericPDF } from '@/lib/export-utils-generic';
@@ -88,6 +88,7 @@ export function ExportRequestNotificationBell() {
       const emailLower = user?.email?.toLowerCase() || '';
       const checkUserRole = async () => {
         try {
+          const supabase = getSupabaseClient();
           const { data } = await supabase
             .from('users')
             .select('role_id, roles!inner(name)')
@@ -117,6 +118,7 @@ export function ExportRequestNotificationBell() {
 
     try {
       setLoading(true);
+      const supabase = getSupabaseClient();
 
       let query = supabase
         .from('export_requests')
@@ -146,6 +148,7 @@ export function ExportRequestNotificationBell() {
 
           try {
             // Get requester user data
+            const supabase = getSupabaseClient();
             const { data: requesterData } = await supabase
               .from('users')
               .select('full_name, email')
@@ -159,6 +162,7 @@ export function ExportRequestNotificationBell() {
           // Get approver user data if request was approved/rejected
           if (req.approved_by) {
             try {
+              const supabase = getSupabaseClient();
               const { data: approverData } = await supabase
                 .from('users')
                 .select('full_name, email')
@@ -191,6 +195,7 @@ export function ExportRequestNotificationBell() {
     loadRequests();
 
     // Subscribe to realtime updates
+    const supabase = getSupabaseClient();
     const channel = supabase
       .channel('export_requests_changes')
       .on(
@@ -214,6 +219,7 @@ export function ExportRequestNotificationBell() {
   const handleApprove = async (request: ExportRequest) => {
     try {
       // Update the request status to approved directly in Supabase
+      const supabase = getSupabaseClient();
       const { error } = await supabase
         .from('export_requests')
         .update({
@@ -249,6 +255,7 @@ export function ExportRequestNotificationBell() {
     const reason = prompt('Enter rejection reason (optional):');
     try {
       // Update the request status to rejected directly in Supabase
+      const supabase = getSupabaseClient();
       const { error } = await supabase
         .from('export_requests')
         .update({

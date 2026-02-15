@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { config } from "@/lib/config";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import {
   Dialog,
   DialogContent,
@@ -115,6 +115,7 @@ function AdminLoginContent() {
 
   const getAuthHeader = async (): Promise<Record<string, string>> => {
     try {
+      const supabase = getSupabaseClient();
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       return token ? { Authorization: `Bearer ${token}` } : {};
@@ -153,7 +154,9 @@ function AdminLoginContent() {
       const officeLoginUrl = (typeof window !== 'undefined')
         ? `${window.location.origin}/admin-login`
         : (process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL || 'http://localhost:8081/admin-login');
-      const { error } = await (await import('@/lib/supabase')).supabase.auth.signInWithOAuth({
+      const { getSupabaseClient } = await import('@/lib/supabase');
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: officeLoginUrl,
@@ -192,7 +195,8 @@ function AdminLoginContent() {
     }
     
     // Prevent multiple redirect attempts (but allow if user just logged in)
-    if (redirectingRef.current) {
+    // Skip this check if we're in the middle of a login flow (isLoading is true)
+    if (redirectingRef.current && !isLoading) {
       return;
     }
     
@@ -209,18 +213,22 @@ function AdminLoginContent() {
       // Quick role check FIRST - don't wait for profile, check email immediately
       const email = user.email?.toLowerCase() || '';
       const isSuperAdminEmail = email === 'superadmin@wozamali.co.za';
-      const isAdminEmail = email.includes('admin@wozamali') || email === 'admin@wozamali.com';
+      const isAdminEmail = email.includes('admin@wozamali') || 
+                          email === 'admin@wozamali.com' ||
+                          email === 'dumisani@sebenzawaste.co.za';
       
       // If super admin or admin email, redirect immediately (don't wait for profile or other checks)
       if (isSuperAdminEmail || isAdminEmail) {
         const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
         console.log('AdminLogin: Redirecting to', redirectPath, '(email check - immediate, returnTo was:', returnTo, ')');
-        router.replace(redirectPath);
+        // Use window.location for more reliable redirect
+        window.location.href = redirectPath;
         return;
       }
 
       // Quick check for password change requirement (non-blocking) - only for non-admin emails
       try {
+        const supabase = getSupabaseClient();
         const { data } = await supabase.auth.getUser();
         const must = (data.user?.user_metadata as any)?.must_change_password;
         if (must) {
@@ -251,7 +259,8 @@ function AdminLoginContent() {
         if (['admin', 'super_admin', 'superadmin'].includes(role)) {
           const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
           console.log('AdminLogin: Redirecting to', redirectPath, '(profile role check, returnTo was:', returnTo, ')');
-          router.replace(redirectPath);
+          // Use window.location for more reliable redirect
+          window.location.href = redirectPath;
           return;
         }
       }
@@ -277,6 +286,7 @@ function AdminLoginContent() {
              }
           } catch (apiEx) {
              console.warn('AdminLogin: API check failed, falling back to direct query', apiEx);
+             const supabase = getSupabaseClient();
              const { data, error } = await supabase
                 .from('users')
                 .select('id, role, status')
@@ -347,7 +357,8 @@ function AdminLoginContent() {
           if (['admin','super_admin','superadmin'].includes(effectiveRole) && existingUser.status === 'active') {
             const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
             console.log('AdminLogin: Redirecting to', redirectPath, '(database check, returnTo was:', returnTo, ')');
-            await router.replace(redirectPath);
+            // Use window.location for more reliable redirect
+            window.location.href = redirectPath;
             return;
           }
 
@@ -399,78 +410,116 @@ function AdminLoginContent() {
       console.log('AdminLogin: Login result:', result);
       
       if (result.success) {
-        // Check role via API to ensure we have the latest data and bypass RLS recursion
+        // Quick email-based check first for immediate redirect
+        const emailLower = email.toLowerCase();
+        const isSuperAdminEmail = emailLower === 'superadmin@wozamali.co.za';
+        const isAdminEmail = emailLower.includes('admin@wozamali') || 
+                            emailLower === 'admin@wozamali.com' ||
+                            emailLower === 'dumisani@sebenzawaste.co.za';
+        
+        // If we can determine admin status from email, redirect immediately
+        if (isSuperAdminEmail || isAdminEmail) {
+          const roleText = isSuperAdminEmail ? 'Super Admin' : 'Admin';
+          setSuccess(`${roleText} login successful! Redirecting...`);
+          console.log('AdminLogin: Admin login successful (email check), redirecting immediately...');
+          
+          // Clear redirect flags to allow navigation
+          redirectAttemptedRef.current = false;
+          redirectingRef.current = false;
+          setIsLoading(false);
+          
+          // Use immediate redirect
+          const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
+          console.log('AdminLogin: Executing immediate redirect to', redirectPath);
+          window.location.href = redirectPath;
+          return; // Exit early, don't wait for API
+        }
+        
+        // For other emails, check role via API (but with timeout)
         try {
-           const authHeader = await getAuthHeader();
-           const res = await fetch('/api/auth/me', { headers: { ...authHeader } });
-           let profile = null;
-           
-           if (res.ok) {
-               const data = await res.json();
-               profile = data.profile;
-           }
+          // Set a timeout for the API check to prevent hanging
+          const profileCheckPromise = (async () => {
+            const authHeader = await getAuthHeader();
+            const res = await fetch('/api/auth/me', { headers: { ...authHeader } });
+            if (res.ok) {
+              const data = await res.json();
+              return data.profile;
+            }
+            return null;
+          })();
+          
+          // Race between profile check and timeout (max 3 seconds)
+          const timeoutPromise = new Promise<null>((resolve) => 
+            setTimeout(() => resolve(null), 3000)
+          );
+          
+          let profile = await Promise.race([profileCheckPromise, timeoutPromise]);
+          
+          // If profile doesn't exist and we have a session, try to create it
+          if (!profile) {
+            const supabase = getSupabaseClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session) {
+              const authHeader = await getAuthHeader();
+              const regRes = await fetch('/api/auth/register-admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeader },
+                body: JSON.stringify({
+                  id: session.user.id,
+                  email: session.user.email,
+                  first_name: '',
+                  last_name: '',
+                  full_name: '',
+                  role: 'admin',
+                  status: 'pending_approval'
+                })
+              });
+              if (regRes.ok) {
+                const regData = await regRes.json();
+                profile = regData.user;
+              }
+            }
+          }
 
-           // If profile doesn't exist, try to create it (Auto-onboarding for email logins too)
-           if (!profile) {
-               // We need the user ID. We can get it from the session (which /api/auth/me uses) 
-               // but we need it here. The login result might not have it?
-               // Actually login() usually updates the auth state, but we can't access it synchronously.
-               // Let's fetch the session first to get the ID.
-               const { data: { session } } = await supabase.auth.getSession();
-               
-               if (session) {
-                   const authHeader = await getAuthHeader();
-                   const regRes = await fetch('/api/auth/register-admin', {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json', ...authHeader },
-                         body: JSON.stringify({
-                            id: session.user.id,
-                            email: session.user.email,
-                            first_name: '', // We don't have these for email login
-                            last_name: '',
-                            full_name: '',
-                            role: 'admin',
-                            status: 'pending_approval'
-                         })
-                   });
-                   if (regRes.ok) {
-                       const regData = await regRes.json();
-                       profile = regData.user;
-                   }
-               }
-           }
-
-           const role = (profile?.role || '').toLowerCase();
-           const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
-           
-           if (isAdmin) {
-              const roleText = role === 'superadmin' || role === 'super_admin' ? 'Super Admin' : 'Admin';
-              setSuccess(`${roleText} login successful! Redirecting...`);
-              console.log('AdminLogin: Admin login successful, redirecting immediately...');
-              
-              setIsLoading(false);
-              
-              setTimeout(() => {
-                const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
-                console.log('AdminLogin: Executing immediate redirect to', redirectPath, '(returnTo was:', returnTo, ')');
-                router.replace(redirectPath);
-              }, 150);
-           } else if (profile?.status === 'pending_approval') {
-              setSuccess('Account created. Redirecting to onboarding...');
-              setTimeout(() => {
-                  router.replace('/admin-onboarding');
-              }, 150);
-           } else {
-              setError('Access denied. This account does not have administrator privileges.');
-              console.error('AdminLogin: User does not have admin role', role);
-              setIsLoading(false);
-           }
+          const role = (profile?.role || '').toLowerCase();
+          const isAdmin = role === 'admin' || role === 'superadmin' || role === 'super_admin';
+          
+          if (isAdmin) {
+            const roleText = role === 'superadmin' || role === 'super_admin' ? 'Super Admin' : 'Admin';
+            setSuccess(`${roleText} login successful! Redirecting...`);
+            console.log('AdminLogin: Admin login successful (API check), redirecting immediately...');
+            
+            // Clear redirect flags to allow navigation
+            redirectAttemptedRef.current = false;
+            redirectingRef.current = false;
+            setIsLoading(false);
+            
+            // Use immediate redirect
+            const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
+            console.log('AdminLogin: Executing immediate redirect to', redirectPath);
+            window.location.href = redirectPath;
+          } else if (profile?.status === 'pending_approval') {
+            setSuccess('Account created. Redirecting to onboarding...');
+            setIsLoading(false);
+            window.location.href = '/admin-onboarding';
+          } else {
+            setError('Access denied. This account does not have administrator privileges.');
+            console.error('AdminLogin: User does not have admin role', role);
+            setIsLoading(false);
+          }
         } catch (err) {
-             console.error('AdminLogin: Role check failed', err);
-             // Fallback to email check if API fails?
-             // No, unsafe. Just error.
-             setError('Login successful but failed to verify role. Please try again.');
-             setIsLoading(false);
+          console.error('AdminLogin: Role check failed', err);
+          // On error, still try to redirect if email suggests admin (fallback)
+          if (emailLower.includes('admin') || emailLower.includes('wozamali')) {
+            console.log('AdminLogin: API check failed, but email suggests admin - redirecting anyway');
+            setIsLoading(false);
+            const redirectPath = returnTo === '/dashboard' ? '/admin/dashboard' : returnTo;
+            window.location.href = redirectPath;
+          } else {
+            setError('Login successful but failed to verify role. Please try again.');
+            setIsLoading(false);
+          }
         }
       } else {
         console.error('AdminLogin: Login failed:', result.error);
@@ -672,28 +721,50 @@ function AdminLoginContent() {
   // Show loading state until component is initialized to prevent flickering
   if (!isInitialized) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <Card className="shadow-2xl border-0">
-            <CardContent className="p-8">
-              <div className="flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-                <p className="text-gray-600 text-sm">Loading...</p>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-1/2 -left-1/2 w-[800px] h-[800px] bg-gradient-to-br from-gray-950 via-gray-900 to-black rounded-full opacity-30 animate-pulse blur-3xl"></div>
+          <div className="absolute top-1/2 -right-1/2 w-[600px] h-[600px] bg-gradient-to-bl from-gray-900 via-black to-gray-950 rounded-full opacity-40 animate-pulse blur-3xl" style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
+        </div>
+        <div className="w-full max-w-md relative z-10">
+          <div className="flex flex-col items-center justify-center">
+            <img 
+              src="/w yellow.png" 
+              alt="Woza Mali Logo" 
+              className="w-20 h-20 animate-pulse"
+            />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated Background with Different Black Shades */}
+      <div className="absolute inset-0 overflow-hidden">
+        {/* Animated gradient orbs */}
+        <div className="absolute -top-1/2 -left-1/2 w-[800px] h-[800px] bg-gradient-to-br from-gray-950 via-gray-900 to-black rounded-full opacity-30 animate-pulse blur-3xl"></div>
+        <div className="absolute top-1/2 -right-1/2 w-[600px] h-[600px] bg-gradient-to-bl from-gray-900 via-black to-gray-950 rounded-full opacity-40 animate-pulse blur-3xl" style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
+        <div className="absolute -bottom-1/2 left-1/3 w-[700px] h-[700px] bg-gradient-to-tr from-black via-gray-950 to-gray-900 rounded-full opacity-25 animate-pulse blur-3xl" style={{ animationDelay: '2s', animationDuration: '5s' }}></div>
+        
+        {/* Subtle grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20"></div>
+        
+        {/* Animated lines */}
+        <div className="absolute top-0 left-0 w-full h-full">
+          <div className="absolute top-1/4 left-0 w-px h-1/2 bg-gradient-to-b from-transparent via-gray-800 to-transparent opacity-30 animate-pulse"></div>
+          <div className="absolute top-0 right-1/4 w-px h-full bg-gradient-to-b from-transparent via-gray-900 to-transparent opacity-20 animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+          <div className="absolute bottom-0 left-1/3 w-full h-px bg-gradient-to-r from-transparent via-gray-800 to-transparent opacity-25 animate-pulse" style={{ animationDelay: '2.5s' }}></div>
+        </div>
+      </div>
+      
+      <div className="w-full max-w-md relative z-10">
         {/* Back Button removed */}
 
         {/* Login Card */}
-        <Card className="shadow-2xl border-0">
+        <Card className="shadow-2xl border-0 bg-zinc-950 backdrop-blur-sm">
           <CardHeader className="text-center pb-4">
             <div className="flex justify-center mb-4">
               <img 
@@ -703,21 +774,21 @@ function AdminLoginContent() {
               />
             </div>
             <CardTitle className="text-2xl font-bold text-white">
-              Woza Mali Access
+              Admin Portal
             </CardTitle>
-            <p className="text-gray-600">
+            <p className="text-gray-400">
               Administrator Portal - Authorized Personnel Only
             </p>
             
             {/* Login Type Tabs */}
-            <div className="flex bg-gray-100 rounded-lg p-1 mt-4">
+            <div className="flex bg-yellow-500/20 rounded-lg p-1 mt-4">
               <button
                 type="button"
                 onClick={() => handleTabChange('admin')}
                 className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === 'admin'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-yellow-500 text-black shadow-sm'
+                    : 'text-yellow-300 hover:text-yellow-200 hover:bg-yellow-500/20'
                 }`}
               >
                 <Building2 className="w-4 h-4 mr-2" />
@@ -728,8 +799,8 @@ function AdminLoginContent() {
                 onClick={() => handleTabChange('superadmin')}
                 className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === 'superadmin'
-                    ? 'bg-white text-yellow-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-yellow-500 text-black shadow-sm'
+                    : 'text-yellow-300 hover:text-yellow-200 hover:bg-yellow-500/20'
                 }`}
               >
                 <Crown className="w-4 h-4 mr-2" />
@@ -741,10 +812,10 @@ function AdminLoginContent() {
             <div className="mt-3">
               <Badge 
                 variant="outline" 
-                className={`${
+                className={`border-0 ${
                   activeTab === 'superadmin'
-                    ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                    : 'bg-blue-100 text-blue-800 border-blue-300'
+                    ? 'bg-yellow-500/30 text-yellow-400'
+                    : 'bg-yellow-500/30 text-yellow-400'
                 }`}
               >
                 {activeTab === 'superadmin' ? (
@@ -767,7 +838,7 @@ function AdminLoginContent() {
 
             {/* Error Message */}
             {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="bg-red-900/20 border-red-800 text-red-300">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
@@ -775,7 +846,7 @@ function AdminLoginContent() {
 
             {/* Success Message */}
             {success && (
-              <Alert className="border-green-200 bg-green-50 text-green-800">
+              <Alert className="border-green-800 bg-green-900/20 text-green-300">
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>{success}</AlertDescription>
               </Alert>
@@ -785,7 +856,7 @@ function AdminLoginContent() {
             {activeTab === 'admin' ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-gray-700 font-medium">
+                  <Label htmlFor="email" className="text-gray-300 font-medium">
                     Email Address
                   </Label>
                   <Input
@@ -795,12 +866,12 @@ function AdminLoginContent() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     required
-                    className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    className="!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-gray-700 focus:!ring-gray-700"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-gray-700 font-medium">
+                  <Label htmlFor="password" className="text-gray-300 font-medium">
                     Password
                   </Label>
                   <div className="relative">
@@ -818,39 +889,39 @@ function AdminLoginContent() {
                       }}
                       placeholder="Enter your password"
                       required
-                      className={`border-gray-300 focus:border-blue-500 focus:ring-blue-500 pr-10 ${
-                        passwordErrors.length > 0 ? 'border-red-500' : ''
+                      className={`!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-gray-700 focus:!ring-gray-700 pr-10 ${
+                        passwordErrors.length > 0 ? '!border-red-500' : ''
                       }`}
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-gray-300"
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-500" />
+                        <EyeOff className="h-4 w-4" />
                       ) : (
-                        <Eye className="h-4 w-4 text-gray-500" />
+                        <Eye className="h-4 w-4" />
                       )}
                     </Button>
                   </div>
                   {/* Password Requirements */}
                   {password.length > 0 && (
-                    <div className="text-xs text-gray-600 space-y-1">
+                    <div className="text-xs text-gray-400 space-y-1">
                       <p className="font-medium">Password must contain:</p>
                       <ul className="list-disc list-inside space-y-0.5 ml-2">
-                        <li className={/[A-Z]/.test(password) ? 'text-green-600' : 'text-gray-500'}>
+                        <li className={/[A-Z]/.test(password) ? 'text-green-400' : 'text-gray-500'}>
                           At least one capital letter {/[A-Z]/.test(password) && '✓'}
                         </li>
-                      <li className={/[@#$%&]/.test(password) ? 'text-green-600' : 'text-gray-500'}>
+                      <li className={/[@#$%&]/.test(password) ? 'text-green-400' : 'text-gray-500'}>
                         At least one symbol (@, #, $, %, or &) {/[@#$%&]/.test(password) && '✓'}
                       </li>
-                        <li className={/[0-9]/.test(password) ? 'text-green-600' : 'text-gray-500'}>
+                        <li className={/[0-9]/.test(password) ? 'text-green-400' : 'text-gray-500'}>
                           At least one number {/[0-9]/.test(password) && '✓'}
                         </li>
-                        <li className={password.length >= 8 ? 'text-green-600' : 'text-gray-500'}>
+                        <li className={password.length >= 8 ? 'text-green-400' : 'text-gray-500'}>
                           At least 8 characters {password.length >= 8 && '✓'}
                         </li>
                       </ul>
@@ -858,7 +929,7 @@ function AdminLoginContent() {
                   )}
                   {/* Password Errors */}
                   {passwordErrors.length > 0 && (
-                    <div className="text-xs text-red-600 space-y-1">
+                    <div className="text-xs text-red-400 space-y-1">
                       {passwordErrors.map((err, idx) => (
                         <p key={idx} className="flex items-center">
                           <AlertCircle className="h-3 w-3 mr-1" />
@@ -874,7 +945,7 @@ function AdminLoginContent() {
                   <button
                     type="button"
                     onClick={() => setShowForgotPassword(true)}
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                    className="text-sm text-gray-400 hover:text-gray-300 hover:underline"
                   >
                     Forgot your password?
                   </button>
@@ -883,7 +954,7 @@ function AdminLoginContent() {
                 <div className="space-y-3 pt-2">
                   <Button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5"
+                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-medium py-2.5"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -900,7 +971,7 @@ function AdminLoginContent() {
                     variant="outline"
                     onClick={handleGoogleLogin}
                     disabled={isLoading}
-                    className="w-full"
+                    className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
                   >
                     <Mail className="mr-2 h-4 w-4" />
                     Continue with Google
@@ -910,18 +981,18 @@ function AdminLoginContent() {
             ) : (
               <form onSubmit={handleSuperAdminLogin} className="space-y-4">
                 {/* Super Admin Info */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
                   <div className="flex items-center mb-2">
-                    <Crown className="w-5 h-5 text-yellow-600 mr-2" />
-                    <h3 className="font-semibold text-yellow-800">Super Admin Access</h3>
+                    <Crown className="w-5 h-5 text-yellow-400 mr-2" />
+                    <h3 className="font-semibold text-yellow-400">Super Admin Access</h3>
                   </div>
-                  <p className="text-xs text-yellow-600">
+                  <p className="text-xs text-yellow-300">
                     Full system access with all administrative privileges
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="superadmin-email" className="text-gray-700 font-medium">
+                  <Label htmlFor="superadmin-email" className="text-gray-300 font-medium">
                     Super Admin Email Address
                   </Label>
                   <Input
@@ -934,12 +1005,12 @@ function AdminLoginContent() {
                     }}
                     placeholder="Enter super admin email address"
                     required
-                    className="border-gray-300 focus:border-yellow-500 focus:ring-yellow-500"
+                    className="!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-yellow-600 focus:!ring-yellow-600"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="superadmin-password" className="text-gray-700 font-medium">
+                  <Label htmlFor="superadmin-password" className="text-gray-300 font-medium">
                     Super Admin Password
                   </Label>
                   <div className="relative">
@@ -957,39 +1028,39 @@ function AdminLoginContent() {
                       }}
                       placeholder="Enter super admin password"
                       required
-                      className={`border-gray-300 focus:border-yellow-500 focus:ring-yellow-500 pr-10 ${
-                        passwordErrors.length > 0 ? 'border-red-500' : ''
+                      className={`!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-yellow-600 focus:!ring-yellow-600 pr-10 ${
+                        passwordErrors.length > 0 ? '!border-red-500' : ''
                       }`}
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-gray-300"
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-500" />
+                        <EyeOff className="h-4 w-4" />
                       ) : (
-                        <Eye className="h-4 w-4 text-gray-500" />
+                        <Eye className="h-4 w-4" />
                       )}
                     </Button>
                   </div>
                   {/* Password Requirements */}
                   {password.length > 0 && (
-                    <div className="text-xs text-gray-600 space-y-1">
+                    <div className="text-xs text-gray-400 space-y-1">
                       <p className="font-medium">Password must contain:</p>
                       <ul className="list-disc list-inside space-y-0.5 ml-2">
-                        <li className={/[A-Z]/.test(password) ? 'text-green-600' : 'text-gray-500'}>
+                        <li className={/[A-Z]/.test(password) ? 'text-green-400' : 'text-gray-500'}>
                           At least one capital letter {/[A-Z]/.test(password) && '✓'}
                         </li>
-                      <li className={/[@#$%&]/.test(password) ? 'text-green-600' : 'text-gray-500'}>
+                      <li className={/[@#$%&]/.test(password) ? 'text-green-400' : 'text-gray-500'}>
                         At least one symbol (@, #, $, %, or &) {/[@#$%&]/.test(password) && '✓'}
                       </li>
-                        <li className={/[0-9]/.test(password) ? 'text-green-600' : 'text-gray-500'}>
+                        <li className={/[0-9]/.test(password) ? 'text-green-400' : 'text-gray-500'}>
                           At least one number {/[0-9]/.test(password) && '✓'}
                         </li>
-                        <li className={password.length >= 8 ? 'text-green-600' : 'text-gray-500'}>
+                        <li className={password.length >= 8 ? 'text-green-400' : 'text-gray-500'}>
                           At least 8 characters {password.length >= 8 && '✓'}
                         </li>
                       </ul>
@@ -997,7 +1068,7 @@ function AdminLoginContent() {
                   )}
                   {/* Password Errors */}
                   {passwordErrors.length > 0 && (
-                    <div className="text-xs text-red-600 space-y-1">
+                    <div className="text-xs text-red-400 space-y-1">
                       {passwordErrors.map((err, idx) => (
                         <p key={idx} className="flex items-center">
                           <AlertCircle className="h-3 w-3 mr-1" />
@@ -1011,7 +1082,7 @@ function AdminLoginContent() {
                 <div className="space-y-3 pt-2">
                   <Button
                     type="submit"
-                    className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5"
+                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-medium py-2.5"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -1032,11 +1103,11 @@ function AdminLoginContent() {
 
             {/* Password Reset Form */}
             {showForgotPassword && (
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Reset Password</h3>
+              <div className="border-t border-gray-800 pt-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Reset Password</h3>
                 <form onSubmit={handlePasswordReset} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="resetEmail" className="text-gray-700 font-medium">
+                    <Label htmlFor="resetEmail" className="text-gray-300 font-medium">
                       Email Address
                     </Label>
                     <Input
@@ -1046,14 +1117,14 @@ function AdminLoginContent() {
                       onChange={(e) => setResetEmail(e.target.value)}
                       placeholder="Enter your email address"
                       required
-                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-gray-700 focus:!ring-gray-700"
                     />
                   </div>
                   
                   <div className="flex space-x-3">
                     <Button
                       type="submit"
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5"
+                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-medium py-2.5"
                       disabled={isResetting}
                     >
                       {isResetting ? (
@@ -1075,7 +1146,7 @@ function AdminLoginContent() {
                         setError(null);
                         setSuccess(null);
                       }}
-                      className="px-4"
+                      className="px-4 border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
                     >
                       Cancel
                     </Button>
@@ -1085,7 +1156,7 @@ function AdminLoginContent() {
             )}
 
             {/* Additional Info */}
-            <div className="text-center text-sm text-gray-500 pt-4 border-t">
+            <div className="text-center text-sm text-gray-400 pt-4 border-t border-gray-800">
               <p>Need help? Contact your system administrator</p>
             </div>
           </CardContent>
@@ -1093,13 +1164,13 @@ function AdminLoginContent() {
 
         {/* Password Update Dialog */}
         <Dialog open={showPasswordUpdate} onOpenChange={setShowPasswordUpdate}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md bg-zinc-950 border-0 backdrop-blur-sm">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-yellow-600" />
+              <DialogTitle className="flex items-center gap-2 text-white">
+                <Lock className="h-5 w-5 text-yellow-400" />
                 Update Password Required
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-gray-400">
                 Your password does not meet the new security requirements. Please update it to continue.
               </DialogDescription>
             </DialogHeader>
@@ -1107,7 +1178,7 @@ function AdminLoginContent() {
             <form onSubmit={handlePasswordUpdate} className="space-y-4 mt-4">
               {/* Error Message */}
               {error && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="bg-red-900/20 border-red-800 text-red-300">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
@@ -1115,7 +1186,7 @@ function AdminLoginContent() {
 
               {/* Success Message */}
               {success && (
-                <Alert className="border-green-200 bg-green-50 text-green-800">
+                <Alert className="border-green-800 bg-green-900/20 text-green-300">
                   <CheckCircle className="h-4 w-4" />
                   <AlertDescription>{success}</AlertDescription>
                 </Alert>
@@ -1123,7 +1194,7 @@ function AdminLoginContent() {
 
               {/* New Password */}
               <div className="space-y-2">
-                <Label htmlFor="new-password" className="text-gray-700 font-medium">
+                <Label htmlFor="new-password" className="text-gray-300 font-medium">
                   New Password
                 </Label>
                 <div className="relative">
@@ -1140,39 +1211,39 @@ function AdminLoginContent() {
                     }}
                     placeholder="Enter new password"
                     required
-                    className={`border-gray-300 focus:border-yellow-500 focus:ring-yellow-500 pr-10 ${
-                      passwordUpdateErrors.length > 0 ? 'border-red-500' : ''
+                    className={`!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-yellow-600 focus:!ring-yellow-600 pr-10 ${
+                      passwordUpdateErrors.length > 0 ? '!border-red-500' : ''
                     }`}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-gray-300"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                   >
                     {showNewPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-500" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-500" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
                 {/* Password Requirements */}
                 {newPassword.length > 0 && (
-                  <div className="text-xs text-gray-600 space-y-1">
+                  <div className="text-xs text-gray-400 space-y-1">
                     <p className="font-medium">Password must contain:</p>
                     <ul className="list-disc list-inside space-y-0.5 ml-2">
-                      <li className={/[A-Z]/.test(newPassword) ? 'text-green-600' : 'text-gray-500'}>
+                      <li className={/[A-Z]/.test(newPassword) ? 'text-green-400' : 'text-gray-500'}>
                         At least one capital letter {/[A-Z]/.test(newPassword) && '✓'}
                       </li>
-                      <li className={/[@#$%&]/.test(newPassword) ? 'text-green-600' : 'text-gray-500'}>
+                      <li className={/[@#$%&]/.test(newPassword) ? 'text-green-400' : 'text-gray-500'}>
                         At least one symbol (@, #, $, %, or &) {/[@#$%&]/.test(newPassword) && '✓'}
                       </li>
-                      <li className={/[0-9]/.test(newPassword) ? 'text-green-600' : 'text-gray-500'}>
+                      <li className={/[0-9]/.test(newPassword) ? 'text-green-400' : 'text-gray-500'}>
                         At least one number {/[0-9]/.test(newPassword) && '✓'}
                       </li>
-                      <li className={newPassword.length >= 8 ? 'text-green-600' : 'text-gray-500'}>
+                      <li className={newPassword.length >= 8 ? 'text-green-400' : 'text-gray-500'}>
                         At least 8 characters {newPassword.length >= 8 && '✓'}
                       </li>
                     </ul>
@@ -1180,7 +1251,7 @@ function AdminLoginContent() {
                 )}
                 {/* Password Errors */}
                 {passwordUpdateErrors.length > 0 && (
-                  <div className="text-xs text-red-600 space-y-1">
+                  <div className="text-xs text-red-400 space-y-1">
                     {passwordUpdateErrors.map((err, idx) => (
                       <p key={idx} className="flex items-center">
                         <AlertCircle className="h-3 w-3 mr-1" />
@@ -1193,7 +1264,7 @@ function AdminLoginContent() {
 
               {/* Confirm Password */}
               <div className="space-y-2">
-                <Label htmlFor="confirm-password" className="text-gray-700 font-medium">
+                <Label htmlFor="confirm-password" className="text-gray-300 font-medium">
                   Confirm New Password
                 </Label>
                 <div className="relative">
@@ -1207,26 +1278,26 @@ function AdminLoginContent() {
                     }}
                     placeholder="Confirm new password"
                     required
-                    className={`border-gray-300 focus:border-yellow-500 focus:ring-yellow-500 pr-10 ${
-                      confirmPassword && newPassword !== confirmPassword ? 'border-red-500' : ''
+                    className={`!bg-gray-900 !border-gray-800 !text-white placeholder:!text-gray-500 focus:!border-yellow-600 focus:!ring-yellow-600 pr-10 ${
+                      confirmPassword && newPassword !== confirmPassword ? '!border-red-500' : ''
                     }`}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-gray-300"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
                     {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-500" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-500" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
                 {confirmPassword && newPassword !== confirmPassword && (
-                  <p className="text-xs text-red-600 flex items-center">
+                  <p className="text-xs text-red-400 flex items-center">
                     <AlertCircle className="h-3 w-3 mr-1" />
                     Passwords do not match
                   </p>
@@ -1236,7 +1307,7 @@ function AdminLoginContent() {
               <div className="flex space-x-3 pt-2">
                 <Button
                   type="submit"
-                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5"
+                  className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-medium py-2.5"
                   disabled={isUpdatingPassword}
                 >
                   {isUpdatingPassword ? (
@@ -1263,16 +1334,20 @@ function AdminLoginContent() {
 export default function AdminLoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <Card className="shadow-2xl border-0">
-            <CardContent className="p-8">
-              <div className="flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-                <p className="text-gray-600 text-sm">Loading...</p>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-1/2 -left-1/2 w-[800px] h-[800px] bg-gradient-to-br from-gray-950 via-gray-900 to-black rounded-full opacity-30 animate-pulse blur-3xl"></div>
+          <div className="absolute top-1/2 -right-1/2 w-[600px] h-[600px] bg-gradient-to-bl from-gray-900 via-black to-gray-950 rounded-full opacity-40 animate-pulse blur-3xl" style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
+        </div>
+        <div className="w-full max-w-md relative z-10">
+          <div className="flex flex-col items-center justify-center">
+            <img 
+              src="/w yellow.png" 
+              alt="Woza Mali Logo" 
+              className="w-20 h-20 animate-pulse"
+            />
+          </div>
         </div>
       </div>
     }>

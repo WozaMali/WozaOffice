@@ -1,10 +1,10 @@
-import { supabase } from './supabase'
+import { getSupabaseClient } from './supabase'
 import { backoffDelays, wait } from './utils'
 // Minimal UI coupling: dispatch lightweight events; UI can decide how to display
 
 type ChannelSpec = {
   name: string
-  onSetup: (channel: ReturnType<typeof supabase.channel>) => void
+  onSetup: (channel: ReturnType<ReturnType<typeof getSupabaseClient>['channel']>) => void
 }
 
 class RealtimeManager {
@@ -42,6 +42,7 @@ class RealtimeManager {
   private attachChannel = (spec: ChannelSpec) => {
     try {
       // Create channel with proper configuration to prevent idle timeouts
+      const supabase = getSupabaseClient();
       const channel = supabase.channel(spec.name, {
         config: {
           // Enable presence to keep connection alive

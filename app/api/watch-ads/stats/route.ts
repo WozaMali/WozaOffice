@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdminClient } from '@/lib/supabase';
 
 // GET - Get stats about which users watched which ads
 export async function GET(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) {
       return NextResponse.json(
         { success: false, error: 'Missing Supabase environment variables' },

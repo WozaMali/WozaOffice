@@ -3,7 +3,7 @@
  * Handles resetting transactions for collections
  */
 
-import { supabase } from './supabase';
+import { getSupabaseClient } from './supabase';
 
 export interface ResetTransactionsResult {
   success: boolean;
@@ -19,6 +19,7 @@ export async function resetCollectionTransactions(collectionId: string): Promise
   try {
     console.log('🔄 Resetting transactions for collection:', collectionId);
 
+    const supabase = getSupabaseClient();
     // Get the collection details first
     const { data: collection, error: collectionError } = await supabase
       .from('unified_collections')
@@ -163,6 +164,7 @@ export async function getCollectionTransactionStatus(collectionId: string): Prom
   queueEntryCount: number;
 }> {
   try {
+    const supabase = getSupabaseClient();
     // Check wallet transactions
     const { data: walletTxs, error: walletError } = await supabase
       .from('wallet_transactions')

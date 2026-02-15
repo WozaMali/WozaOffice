@@ -26,9 +26,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="icon" href="/w yellow.png" />
-        <link rel="shortcut icon" href="/w yellow.png" />
-        <link rel="apple-touch-icon" href="/w yellow.png" />
+        <link rel="icon" href="/w%20yellow.png" />
+        <link rel="shortcut icon" href="/w%20yellow.png" />
+        <link rel="apple-touch-icon" href="/w%20yellow.png" />
       </head>
       <body>
         <ThemeProvider defaultTheme="system" storageKey="woza-mali-theme">

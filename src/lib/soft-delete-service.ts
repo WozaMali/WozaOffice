@@ -4,7 +4,7 @@
  * Moves records to deleted_transactions table instead of hard deleting
  */
 
-import { supabase } from './supabase';
+import { getSupabaseClient } from './supabase';
 
 export interface SoftDeleteResult {
   success: boolean;
@@ -24,6 +24,7 @@ export async function softDeleteCollection(
   try {
     console.log('🗑️ Starting soft delete for collection:', collectionId);
     
+    const supabase = getSupabaseClient();
     // Get current user to verify they have super_admin role
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
@@ -83,6 +84,7 @@ export async function getDeletedTransactions(): Promise<{
   error: any;
 }> {
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('v_deleted_transactions')
       .select('*')
@@ -110,6 +112,7 @@ export async function restoreDeletedTransaction(
   try {
     console.log('🔄 Starting restore for deleted transaction:', deletedTransactionId);
     
+    const supabase = getSupabaseClient();
     // Get current user to verify they have super_admin role
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
@@ -184,6 +187,7 @@ export async function permanentlyDeleteTransaction(
   try {
     console.log('🗑️ Starting permanent delete for deleted transaction:', deletedTransactionId);
     
+    const supabase = getSupabaseClient();
     // Get current user to verify they have super_admin role
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
@@ -230,6 +234,7 @@ export async function permanentlyDeleteTransaction(
  */
 export async function isCollectionDeleted(collectionId: string): Promise<boolean> {
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('deleted_transactions')
       .select('id')

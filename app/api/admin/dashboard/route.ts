@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdminClient } from '@/lib/supabase';
+
+const supabaseAdmin = getSupabaseAdminClient();
 
 console.log('🔑 Dashboard API Route Environment Check:');
 console.log('🔑 SUPABASE_ADMIN client available:', !!supabaseAdmin);
