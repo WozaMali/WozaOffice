@@ -11,6 +11,12 @@ export async function POST(
 ) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
     const { id } = await params;
 
     // Get the export request

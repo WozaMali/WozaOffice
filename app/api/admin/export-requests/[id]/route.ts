@@ -8,6 +8,12 @@ export async function GET(
 ) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
     const { id } = await params;
 
     const { data: requestData, error } = await supabaseAdmin
@@ -72,6 +78,12 @@ export async function PATCH(
     const { status, rejection_reason } = body;
 
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
 
     // Get user from auth header
     const authHeader = request.headers.get('authorization');

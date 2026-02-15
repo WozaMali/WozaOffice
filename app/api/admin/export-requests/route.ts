@@ -31,6 +31,12 @@ async function verifyUserToken(token: string) {
 export async function POST(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
     const body = await request.json();
     const { export_type, report_title, filename, request_data } = body;
 
@@ -89,6 +95,12 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not initialized' },
+        { status: 500 }
+      );
+    }
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
